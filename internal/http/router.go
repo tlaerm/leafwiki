@@ -171,7 +171,6 @@ func NewRouter(registrars []RouteRegistrar, frontendCfg FrontendConfig, opts Rou
 	if opts.MCPServer != nil {
 		mcpHandler := opts.MCPServer.Mount()
 		base.Any("/api/mcp", gin.WrapH(mcpHandler))
-		base.Any("/api/mcp/*", gin.WrapH(mcpHandler))
 	}
 
 	// Resolve custom stylesheet: prefer pre-validated FrontendConfig path,

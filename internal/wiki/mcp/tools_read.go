@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -95,6 +96,8 @@ func (s *Server) handleGetPageByPath(ctx context.Context, req mcp.CallToolReques
 	if path == "" {
 		return mcp.NewToolResultError(ErrInvalidInput.Message), nil
 	}
+	// Strip leading slash: "FindPageByRoutePath" splits on "/" and rejects empty parts.
+	path = strings.TrimPrefix(path, "/")
 
 	page, err := s.config.TreeSvc.FindPageByRoutePath(path)
 	if err != nil {
@@ -207,7 +210,11 @@ func walkTree(node *tree.PageNode, depth int) []string {
 	for i := 0; i < depth; i++ {
 		indent += "  "
 	}
-	lines = append(lines, indent+"- **"+node.Title+"** ["+node.ID+"] ("+string(node.Kind)+") /"+node.Slug)
+	line := indent + "- **" + node.Title + "** [" + node.ID + "] (" + string(node.Kind) + ") /" + node.Slug
+	if node.Kind == tree.NodeKindPage && !node.Metadata.UpdatedAt.IsZero() {
+		line += " (updated: " + node.Metadata.UpdatedAt.Format("2006-01-02 15:04:05") + ")"
+	}
+	lines = append(lines, line)
 	for _, child := range node.Children {
 		lines = append(lines, walkTree(child, depth+1)...)
 	}

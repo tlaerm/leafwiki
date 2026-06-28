@@ -100,9 +100,9 @@ func (s *Server) handleCreatePage(ctx context.Context, req mcp.CallToolRequest) 
 		return mcp.NewToolResultErrorf("Failed to create page: %s", err.Error()), nil
 	}
 
-	err = s.config.TreeSvc.UpdateNode(user.ID, *id, title, slug, &content, "", false)
+	err = s.config.TreeSvc.UpdateNode(user.ID, *id, title, slug, &content, tree.VersionUnchecked, false)
 	if err != nil {
-		s.config.TreeSvc.DeleteNode(user.ID, *id, false, "")
+		s.config.TreeSvc.DeleteNode(user.ID, *id, false, tree.VersionUnchecked)
 		return mcp.NewToolResultErrorf("Failed to set page content: %s", err.Error()), nil
 	}
 
@@ -120,20 +120,13 @@ func (s *Server) handleUpdatePage(ctx context.Context, req mcp.CallToolRequest) 
 		return mcp.NewToolResultError(ErrInvalidInput.Message), nil
 	}
 
-	// Check page exists
-	_, err := s.config.TreeSvc.GetPage(id)
-	if err != nil {
-		return mcp.NewToolResultError(ErrPageNotFound.Message), nil
-	}
-
 	title := req.GetString("title", "")
 	content := req.GetString("content", "")
 	if title == "" && content == "" {
 		return mcp.NewToolResultError(ErrInvalidInput.Message), nil
 	}
 
-	// Get current page for title/slug
-	page, _ := s.config.TreeSvc.GetPage(id)
+	page, err := s.config.TreeSvc.GetPage(id)
 	if page == nil {
 		return mcp.NewToolResultError(ErrPageNotFound.Message), nil
 	}
@@ -148,7 +141,7 @@ func (s *Server) handleUpdatePage(ctx context.Context, req mcp.CallToolRequest) 
 		contentPtr = &content
 	}
 
-	err = s.config.TreeSvc.UpdateNode(user.ID, id, newTitle, page.Slug, contentPtr, "", false)
+	err = s.config.TreeSvc.UpdateNode(user.ID, id, newTitle, page.Slug, contentPtr, tree.VersionUnchecked, false)
 	if err != nil {
 		return mcp.NewToolResultErrorf("Failed to update page: %s", err.Error()), nil
 	}
@@ -169,7 +162,7 @@ func (s *Server) handleDeletePage(ctx context.Context, req mcp.CallToolRequest) 
 
 	recursive := req.GetBool("recursive", false)
 
-	err := s.config.TreeSvc.DeleteNode(user.ID, id, recursive, "")
+	err := s.config.TreeSvc.DeleteNode(user.ID, id, recursive, tree.VersionUnchecked)
 	if err != nil {
 		return mcp.NewToolResultErrorf("Failed to delete page: %s", err.Error()), nil
 	}
@@ -189,7 +182,7 @@ func (s *Server) handleMovePage(ctx context.Context, req mcp.CallToolRequest) (*
 		return mcp.NewToolResultError(ErrInvalidInput.Message), nil
 	}
 
-	err := s.config.TreeSvc.MoveNode(user.ID, id, parentID, "")
+	err := s.config.TreeSvc.MoveNode(user.ID, id, parentID, tree.VersionUnchecked)
 	if err != nil {
 		return mcp.NewToolResultErrorf("Failed to move page: %s", err.Error()), nil
 	}
