@@ -578,10 +578,17 @@ func (w *Wiki) Close() error {
 	w.status.Finish()
 	var firstErr error
 
-	if err := w.auth.Close(); err != nil {
-		firstErr = err
+	if w.auth != nil {
+		if err := w.auth.Close(); err != nil {
+			firstErr = err
+		}
 	}
 	if err := w.user.Close(); err != nil {
+		if firstErr == nil {
+			firstErr = err
+		}
+	}
+	if err := w.apiKey.Close(); err != nil {
 		if firstErr == nil {
 			firstErr = err
 		}
