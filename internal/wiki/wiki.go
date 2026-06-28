@@ -576,15 +576,43 @@ func (w *Wiki) UserService() *auth.UserService {
 
 func (w *Wiki) Close() error {
 	w.status.Finish()
+	var firstErr error
+
+	if err := w.auth.Close(); err != nil {
+		firstErr = err
+	}
 	if err := w.user.Close(); err != nil {
-		return err
+		if firstErr == nil {
+			firstErr = err
+		}
 	}
 
 	if w.links != nil {
 		if err := w.links.Close(); err != nil {
-			w.log.Error("error closing links", "error", err)
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	if w.tags != nil {
+		if err := w.tags.Close(); err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	if w.props != nil {
+		if err := w.props.Close(); err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	if err := w.searchIndex.Close(); err != nil {
+		if firstErr == nil {
+			firstErr = err
 		}
 	}
 
-	return w.searchIndex.Close()
+	return firstErr
 }

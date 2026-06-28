@@ -77,6 +77,11 @@ func newTestWiki(t *testing.T) *wiki.Wiki {
 	if err != nil {
 		t.Fatalf("NewWiki err: %v", err)
 	}
+	t.Cleanup(func() {
+		if err := w.Close(); err != nil {
+			t.Logf("Failed to close wiki instance: %v", err)
+		}
+	})
 	return w
 }
 

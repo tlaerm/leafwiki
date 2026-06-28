@@ -21,6 +21,10 @@ type AuthService struct {
 	dummyHash            []byte
 }
 
+func (a *AuthService) Close() error {
+	return a.sessionStore.Close()
+}
+
 func NewAuthService(userService *UserService, sessionStore *SessionStore, secret string, accessTokenTimeout, refreshTokenTimeout time.Duration) *AuthService {
 	if len(secret) < 32 {
 		slog.Warn("JWT secret is too short; a minimum of 32 characters is strongly recommended", "length", len(secret))

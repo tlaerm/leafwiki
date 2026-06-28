@@ -26,6 +26,11 @@ func setupTestAuthService(t *testing.T) *AuthService {
 	}
 
 	authService := NewAuthService(userService, sessionStore, "test-secret-key-for-unit-tests-1", 1*time.Hour, 24*time.Hour*7)
+	t.Cleanup(func() {
+		if err := authService.Close(); err != nil {
+			t.Logf("Failed to close auth service: %v", err)
+		}
+	})
 	return authService
 }
 

@@ -44,6 +44,11 @@ func createWikiTestInstanceWithRevisionFlag(t *testing.T, enableRevision bool) *
 	if err != nil {
 		t.Fatalf("Failed to create wiki instance: %v", err)
 	}
+	t.Cleanup(func() {
+		if err := w.Close(); err != nil {
+			t.Logf("Failed to close wiki instance: %v", err)
+		}
+	})
 	return w
 }
 

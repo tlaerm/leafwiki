@@ -24,6 +24,11 @@ func createWikiTestInstance(t *testing.T) *Wiki {
 	if err != nil {
 		t.Fatalf("Failed to create wiki instance: %v", err)
 	}
+	t.Cleanup(func() {
+		if err := wikiInstance.Close(); err != nil {
+			t.Logf("Failed to close wiki instance: %v", err)
+		}
+	})
 	return wikiInstance
 }
 

@@ -21,6 +21,10 @@ func NewPropertiesService(store *PropertiesStore) *PropertiesService {
 	return &PropertiesService{store: store}
 }
 
+func (s *PropertiesService) Close() error {
+	return s.store.Close()
+}
+
 func (s *PropertiesService) ClearIndex() error {
 	return s.store.Clear()
 }

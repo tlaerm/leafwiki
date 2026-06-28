@@ -37,7 +37,7 @@ func createTestAuthFixture(t *testing.T) *authFixture {
 		t.Fatalf("Failed to init default admin: %v", err)
 	}
 
-	return &authFixture{
+	fixture := &authFixture{
 		auth: coreauth.NewAuthService(userService, sessionStore, "test-secret-key-for-unit-tests-1", 15*time.Minute, 7*24*time.Hour),
 		close: func() error {
 			if err := sessionStore.Close(); err != nil {
@@ -47,6 +47,12 @@ func createTestAuthFixture(t *testing.T) *authFixture {
 			return userStore.Close()
 		},
 	}
+	t.Cleanup(func() {
+		if err := fixture.close(); err != nil {
+			t.Logf("Failed to close auth fixture: %v", err)
+		}
+	})
+	return fixture
 }
 
 func TestRequireAuth_WithAuthDisabled_UserExists(t *testing.T) {
