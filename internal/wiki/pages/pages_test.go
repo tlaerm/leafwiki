@@ -32,6 +32,12 @@ type testDeps struct {
 	assets     *assets.AssetService
 }
 
+func (d *testDeps) close() {
+	if d.links != nil {
+		d.links.Close()
+	}
+}
+
 func newTestDeps(t *testing.T) *testDeps {
 	t.Helper()
 	storageDir := t.TempDir()
@@ -55,7 +61,7 @@ func newTestDeps(t *testing.T) *testDeps {
 		revision.ServiceOptions{},
 	)
 
-	return &testDeps{
+	deps := &testDeps{
 		storageDir: storageDir,
 		tree:       treeService,
 		slug:       slugService,
@@ -63,6 +69,12 @@ func newTestDeps(t *testing.T) *testDeps {
 		links:      linkService,
 		assets:     assetService,
 	}
+
+	t.Cleanup(func() {
+		deps.close()
+	})
+
+	return deps
 }
 
 func (d *testDeps) orchestrator() *pagesave.PageSaveOrchestrator {
