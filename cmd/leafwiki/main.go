@@ -400,6 +400,7 @@ func main() {
 		},
 		DisableRequestLog: disableRequestLog,
 		APIKeyService:     w.APIKeyService(),
+		MCPServer:         w.MCPServer(),
 	})
 
 	listenAddr := host + ":" + port

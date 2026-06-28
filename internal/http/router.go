@@ -16,6 +16,7 @@ import (
 	coreauth "github.com/perber/wiki/internal/core/auth"
 	auth_middleware "github.com/perber/wiki/internal/http/middleware/auth"
 	"github.com/perber/wiki/internal/http/middleware/security"
+	wikimcp "github.com/perber/wiki/internal/wiki/mcp"
 )
 
 //go:embed dist/**
@@ -98,6 +99,7 @@ type RouterOptions struct {
 	HTTPRemoteUser          HTTPRemoteUserConfig // Reverse-proxy authentication via HTTP header
 	DisableRequestLog       bool                 // Whether to suppress per-request access log lines
 	APIKeyService           *coreauth.APIKeyService // API key authentication service
+	MCPServer               *wikimcp.Server       // MCP server for agent access
 }
 
 // FrontendConfig carries the minimal runtime data required to serve the embedded SPA.
@@ -163,6 +165,13 @@ func NewRouter(registrars []RouteRegistrar, frontendCfg FrontendConfig, opts Rou
 
 	for _, r := range registrars {
 		r.RegisterRoutes(ctx)
+	}
+
+	// Mount MCP server
+	if opts.MCPServer != nil {
+		mcpHandler := opts.MCPServer.Mount()
+		base.Any("/api/mcp", gin.WrapH(mcpHandler))
+		base.Any("/api/mcp/*", gin.WrapH(mcpHandler))
 	}
 
 	// Resolve custom stylesheet: prefer pre-validated FrontendConfig path,

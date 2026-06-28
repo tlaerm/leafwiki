@@ -26,6 +26,7 @@ import (
 	wikiimporter "github.com/perber/wiki/internal/wiki/importer"
 	wikilinks "github.com/perber/wiki/internal/wiki/links"
 	wikipages "github.com/perber/wiki/internal/wiki/pages"
+	wikimcp "github.com/perber/wiki/internal/wiki/mcp"
 	"github.com/perber/wiki/internal/wiki/pagesave"
 	wikiproperties "github.com/perber/wiki/internal/wiki/properties"
 	wikirevisions "github.com/perber/wiki/internal/wiki/revisions"
@@ -58,6 +59,7 @@ type Wiki struct {
 	brandingRoutes   *wikibranding.Routes
 	importerRoutes   *wikiimporter.Routes
 	healthRoutes     *wikihealth.Routes
+	mcpRoutes        *wikimcp.Server
 	revision         *revision.Service
 	links            *links.LinkService
 	tags             *tags.TagsService
@@ -307,6 +309,7 @@ func (w *Wiki) buildRoutes(options *WikiOptions) {
 	w.propertiesRoutes = w.buildPropertiesRoutes()
 	w.brandingRoutes = w.buildBrandingRoutes()
 	w.importerRoutes = w.buildImporterRoutes(options)
+	w.mcpRoutes = w.buildMCPRoutes()
 	w.healthRoutes = wikihealth.NewRoutes(wikihealth.RoutesConfig{
 		Index:      w.searchIndex,
 		Status:     w.status,
@@ -435,6 +438,19 @@ func (w *Wiki) buildBrandingRoutes() *wikibranding.Routes {
 		BrandingService: w.branding,
 		AuthService:     w.auth,
 		Log:             w.log,
+	})
+}
+
+func (w *Wiki) buildMCPRoutes() *wikimcp.Server {
+	return wikimcp.New(wikimcp.Config{
+		Name:        "LeafWiki",
+		Version:     "0.1.0",
+		APIKeySvc:   w.apiKey,
+		TreeSvc:     w.tree,
+		SlugSvc:     w.slug,
+		SearchIndex: w.searchIndex,
+		RevisionSvc: w.revision,
+		UserSvc:     w.user,
 	})
 }
 
@@ -583,6 +599,10 @@ func (w *Wiki) UserService() *auth.UserService {
 
 func (w *Wiki) APIKeyService() *auth.APIKeyService {
 	return w.apiKey
+}
+
+func (w *Wiki) MCPServer() *wikimcp.Server {
+	return w.mcpRoutes
 }
 
 func (w *Wiki) Close() error {
