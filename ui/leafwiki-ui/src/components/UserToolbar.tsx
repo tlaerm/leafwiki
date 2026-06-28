@@ -168,6 +168,14 @@ export default function UserToolbar() {
           >
             Change Own Password
           </DropdownMenuItem>
+          <RoleGuard roles={['admin', 'editor']}>
+            <DropdownMenuItem
+              className="cursor-pointer"
+              onClick={() => navigate('/settings/apikeys')}
+            >
+              API Keys
+            </DropdownMenuItem>
+          </RoleGuard>
           {(!httpRemoteUserEnabled || httpRemoteUserLogoutUrl) && (
             <DropdownMenuItem
               className="cursor-pointer"

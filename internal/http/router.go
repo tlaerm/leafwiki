@@ -97,6 +97,7 @@ type RouterOptions struct {
 	EnableLinkRefactor      bool                 // Whether the link refactoring feature is enabled in the frontend
 	HTTPRemoteUser          HTTPRemoteUserConfig // Reverse-proxy authentication via HTTP header
 	DisableRequestLog       bool                 // Whether to suppress per-request access log lines
+	APIKeyService           *coreauth.APIKeyService // API key authentication service
 }
 
 // FrontendConfig carries the minimal runtime data required to serve the embedded SPA.
@@ -145,6 +146,11 @@ func NewRouter(registrars []RouteRegistrar, frontendCfg FrontendConfig, opts Rou
 			TrustedProxies: opts.HTTPRemoteUser.TrustedProxies,
 			UserService:    opts.HTTPRemoteUser.UserService,
 		}))
+	}
+
+	// API key authentication via Bearer token — runs before RequireAuth
+	if opts.APIKeyService != nil {
+		base.Use(auth_middleware.RequireAPIKeyAuth(opts.APIKeyService))
 	}
 
 	ctx := RouterContext{

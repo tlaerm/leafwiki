@@ -39,6 +39,7 @@ type Wiki struct {
 	auth         *auth.AuthService
 	userResolver *auth.UserResolver
 	user         *auth.UserService
+	apiKey       *auth.APIKeyService
 	asset        *assets.AssetService
 	branding     *branding.BrandingService
 	searchIndex  *search.SQLiteIndex
@@ -181,6 +182,11 @@ func (w *Wiki) initAuth(options *WikiOptions) error {
 		}
 		w.auth = auth.NewAuthService(w.user, sessionStore, options.JWTSecret, options.AccessTokenTimeout, options.RefreshTokenTimeout)
 	}
+	apiKeyStore, err := auth.NewAPIKeyStore(w.storageDir)
+	if err != nil {
+		return err
+	}
+	w.apiKey = auth.NewAPIKeyService(apiKeyStore, w.user)
 	return nil
 }
 
@@ -357,6 +363,7 @@ func (w *Wiki) buildAuthRoutes() *wikiauth.Routes {
 		GetUsers:          wikiauth.NewGetUsersUseCase(w.user),
 		GetUserByID:       wikiauth.NewGetUserByIDUseCase(w.user),
 		AuthService:       w.auth,
+		APIKeyService:     w.apiKey,
 	})
 }
 
@@ -572,6 +579,10 @@ func (w *Wiki) GetStorageDir() string {
 
 func (w *Wiki) UserService() *auth.UserService {
 	return w.user
+}
+
+func (w *Wiki) APIKeyService() *auth.APIKeyService {
+	return w.apiKey
 }
 
 func (w *Wiki) Close() error {
