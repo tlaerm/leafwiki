@@ -266,7 +266,7 @@ func (s *APIKeyStore) UpdateLastUsed(keyID string, now time.Time) error {
 	result, err := s.db.Exec(`
 		UPDATE api_keys
 		SET last_used_at = ?
-		WHERE id = ?;
+		WHERE id = ? AND revoked_at IS NULL;
 	`, now, keyID)
 	if err != nil {
 		return err
