@@ -3,14 +3,18 @@ package auth
 import (
 	"database/sql"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/perber/wiki/internal/core/shared"
 
 	_ "modernc.org/sqlite"
 )
 
 type APIKeyRow struct {
 	ID         string
+	ShortID    string
 	UserID     string
 	Name       string
 	ExpiresAt  *time.Time
@@ -70,7 +74,47 @@ func (s *APIKeyStore) ensureSchema() error {
 			revoked_at TIMESTAMP
 		);
 	`)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Migration: add short_id column if it doesn't exist
+	_, err = s.db.Exec(`ALTER TABLE api_keys ADD COLUMN short_id TEXT NOT NULL DEFAULT ''`)
+	if err != nil {
+		// Column already exists — ignore
+	}
+
+	// Backfill short IDs for existing rows
+	rows, err := s.db.Query(`SELECT rowid FROM api_keys WHERE short_id = ''`)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var rowid int64
+		if err := rows.Scan(&rowid); err != nil {
+			rows.Close()
+			return err
+		}
+		shortID, err := shared.GenerateUniqueID()
+		if err != nil {
+			rows.Close()
+			return err
+		}
+		_, err = s.db.Exec(`UPDATE api_keys SET short_id = ? WHERE rowid = ?`, shortID, rowid)
+		if err != nil {
+			rows.Close()
+			return err
+		}
+	}
+	rows.Close()
+
+	// Unique index on short_id
+	_, err = s.db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_short_id ON api_keys(short_id)`)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (s *APIKeyStore) Close() error {
@@ -86,15 +130,18 @@ func (s *APIKeyStore) Close() error {
 	return nil
 }
 
-func (s *APIKeyStore) Create(keyID, userID, name string, expiresAt *time.Time) error {
+func (s *APIKeyStore) Create(keyID, shortID, userID, name string, expiresAt *time.Time) error {
 	err := s.Connect()
 	if err != nil {
 		return err
 	}
 	_, err = s.db.Exec(`
-		INSERT INTO api_keys (id, user_id, name, expires_at)
-		VALUES (?, ?, ?, ?);
-	`, keyID, userID, name, expiresAt)
+		INSERT INTO api_keys (id, short_id, user_id, name, expires_at)
+		VALUES (?, ?, ?, ?, ?);
+	`, keyID, shortID, userID, name, expiresAt)
+	if err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed") {
+		return ErrAPIKeyShortIDTaken
+	}
 	return err
 }
 
@@ -104,13 +151,35 @@ func (s *APIKeyStore) FindByKeyHash(keyID string) (*APIKeyRow, error) {
 		return nil, err
 	}
 	row := s.db.QueryRow(`
-		SELECT id, user_id, name, expires_at, created_at, last_used_at, revoked_at
+		SELECT id, short_id, user_id, name, expires_at, created_at, last_used_at, revoked_at
 		FROM api_keys
 		WHERE id = ?;
 	`, keyID)
 
 	k := &APIKeyRow{}
-	err = row.Scan(&k.ID, &k.UserID, &k.Name, &k.ExpiresAt, &k.CreatedAt, &k.LastUsedAt, &k.RevokedAt)
+	err = row.Scan(&k.ID, &k.ShortID, &k.UserID, &k.Name, &k.ExpiresAt, &k.CreatedAt, &k.LastUsedAt, &k.RevokedAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ErrAPIKeyNotFound
+		}
+		return nil, err
+	}
+	return k, nil
+}
+
+func (s *APIKeyStore) FindByShortID(shortID string) (*APIKeyRow, error) {
+	err := s.Connect()
+	if err != nil {
+		return nil, err
+	}
+	row := s.db.QueryRow(`
+		SELECT id, short_id, user_id, name, expires_at, created_at, last_used_at, revoked_at
+		FROM api_keys
+		WHERE short_id = ?;
+	`, shortID)
+
+	k := &APIKeyRow{}
+	err = row.Scan(&k.ID, &k.ShortID, &k.UserID, &k.Name, &k.ExpiresAt, &k.CreatedAt, &k.LastUsedAt, &k.RevokedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, ErrAPIKeyNotFound
@@ -126,7 +195,7 @@ func (s *APIKeyStore) ListByUser(userID string) ([]APIKeyRow, error) {
 		return nil, err
 	}
 	rows, err := s.db.Query(`
-		SELECT id, user_id, name, expires_at, created_at, last_used_at, revoked_at
+		SELECT id, short_id, user_id, name, expires_at, created_at, last_used_at, revoked_at
 		FROM api_keys
 		WHERE user_id = ? AND revoked_at IS NULL
 		ORDER BY created_at DESC;
@@ -143,7 +212,7 @@ func (s *APIKeyStore) ListByUser(userID string) ([]APIKeyRow, error) {
 	var keys []APIKeyRow
 	for rows.Next() {
 		k := APIKeyRow{}
-		err = rows.Scan(&k.ID, &k.UserID, &k.Name, &k.ExpiresAt, &k.CreatedAt, &k.LastUsedAt, &k.RevokedAt)
+		err = rows.Scan(&k.ID, &k.ShortID, &k.UserID, &k.Name, &k.ExpiresAt, &k.CreatedAt, &k.LastUsedAt, &k.RevokedAt)
 		if err != nil {
 			return nil, err
 		}

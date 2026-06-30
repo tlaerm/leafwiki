@@ -23,7 +23,7 @@ func TestAPIKeyStore_CreateAndFind(t *testing.T) {
 	store := setupTestAPIKeyStore(t)
 
 	keyID := "$2a$10$abcdefghijklmnop"
-	err := store.Create(keyID, "user-1", "test key", nil)
+	err := store.Create(keyID, "short-1", "user-1", "test key", nil)
 	if err != nil {
 		t.Fatalf("failed to create api key: %v", err)
 	}
@@ -35,6 +35,9 @@ func TestAPIKeyStore_CreateAndFind(t *testing.T) {
 
 	if row.ID != keyID {
 		t.Errorf("expected id %s, got %s", keyID, row.ID)
+	}
+	if row.ShortID != "short-1" {
+		t.Errorf("expected shortID short-1, got %s", row.ShortID)
 	}
 	if row.UserID != "user-1" {
 		t.Errorf("expected userID user-1, got %s", row.UserID)
@@ -50,11 +53,58 @@ func TestAPIKeyStore_CreateAndFind(t *testing.T) {
 	}
 }
 
+func TestAPIKeyStore_FindByShortID(t *testing.T) {
+	store := setupTestAPIKeyStore(t)
+
+	err := store.Create("key-hash", "short-find", "user-1", "find me", nil)
+	if err != nil {
+		t.Fatalf("failed to create api key: %v", err)
+	}
+
+	row, err := store.FindByShortID("short-find")
+	if err != nil {
+		t.Fatalf("failed to find api key by short ID: %v", err)
+	}
+
+	if row.ID != "key-hash" {
+		t.Errorf("expected id key-hash, got %s", row.ID)
+	}
+	if row.ShortID != "short-find" {
+		t.Errorf("expected shortID short-find, got %s", row.ShortID)
+	}
+	if row.UserID != "user-1" {
+		t.Errorf("expected userID user-1, got %s", row.UserID)
+	}
+}
+
+func TestAPIKeyStore_FindByShortIDNotFound(t *testing.T) {
+	store := setupTestAPIKeyStore(t)
+
+	_, err := store.FindByShortID("nonexistent")
+	if err != ErrAPIKeyNotFound {
+		t.Errorf("expected ErrAPIKeyNotFound, got %v", err)
+	}
+}
+
+func TestAPIKeyStore_CreateDuplicateShortID(t *testing.T) {
+	store := setupTestAPIKeyStore(t)
+
+	err := store.Create("key-1", "dup-short", "user-1", "first", nil)
+	if err != nil {
+		t.Fatalf("failed to create first key: %v", err)
+	}
+
+	err = store.Create("key-2", "dup-short", "user-1", "second", nil)
+	if err != ErrAPIKeyShortIDTaken {
+		t.Errorf("expected ErrAPIKeyShortIDTaken, got %v", err)
+	}
+}
+
 func TestAPIKeyStore_CreateWithExpiration(t *testing.T) {
 	store := setupTestAPIKeyStore(t)
 
 	expiresAt := time.Now().Add(24 * time.Hour)
-	err := store.Create("key-id", "user-1", "expiring key", &expiresAt)
+	err := store.Create("key-id", "short-exp", "user-1", "expiring key", &expiresAt)
 	if err != nil {
 		t.Fatalf("failed to create api key: %v", err)
 	}
@@ -81,15 +131,15 @@ func TestAPIKeyStore_FindNotFound(t *testing.T) {
 func TestAPIKeyStore_ListByUser(t *testing.T) {
 	store := setupTestAPIKeyStore(t)
 
-	err := store.Create("key-1", "user-1", "first", nil)
+	err := store.Create("key-1", "short-1", "user-1", "first", nil)
 	if err != nil {
 		t.Fatalf("failed to create key: %v", err)
 	}
-	err = store.Create("key-2", "user-1", "second", nil)
+	err = store.Create("key-2", "short-2", "user-1", "second", nil)
 	if err != nil {
 		t.Fatalf("failed to create key: %v", err)
 	}
-	err = store.Create("key-3", "user-2", "other user", nil)
+	err = store.Create("key-3", "short-3", "user-2", "other user", nil)
 	if err != nil {
 		t.Fatalf("failed to create key: %v", err)
 	}
@@ -102,12 +152,19 @@ func TestAPIKeyStore_ListByUser(t *testing.T) {
 	if len(keys) != 2 {
 		t.Fatalf("expected 2 keys, got %d", len(keys))
 	}
+
+	// Verify ShortID is populated
+	for _, k := range keys {
+		if k.ShortID == "" {
+			t.Errorf("expected non-empty short ID, got empty string")
+		}
+	}
 }
 
 func TestAPIKeyStore_Revoke(t *testing.T) {
 	store := setupTestAPIKeyStore(t)
 
-	err := store.Create("key-id", "user-1", "to revoke", nil)
+	err := store.Create("key-id", "short-rev", "user-1", "to revoke", nil)
 	if err != nil {
 		t.Fatalf("failed to create key: %v", err)
 	}
@@ -139,7 +196,7 @@ func TestAPIKeyStore_RevokeNotFound(t *testing.T) {
 func TestAPIKeyStore_RevokeAlreadyRevoked(t *testing.T) {
 	store := setupTestAPIKeyStore(t)
 
-	err := store.Create("key-id", "user-1", "already revoked", nil)
+	err := store.Create("key-id", "short-already", "user-1", "already revoked", nil)
 	if err != nil {
 		t.Fatalf("failed to create key: %v", err)
 	}
@@ -158,7 +215,7 @@ func TestAPIKeyStore_RevokeAlreadyRevoked(t *testing.T) {
 func TestAPIKeyStore_UpdateLastUsed(t *testing.T) {
 	store := setupTestAPIKeyStore(t)
 
-	err := store.Create("key-id", "user-1", "used key", nil)
+	err := store.Create("key-id", "short-used", "user-1", "used key", nil)
 	if err != nil {
 		t.Fatalf("failed to create key: %v", err)
 	}
@@ -191,15 +248,15 @@ func TestAPIKeyStore_UpdateLastUsedNotFound(t *testing.T) {
 func TestAPIKeyStore_DeleteByUser(t *testing.T) {
 	store := setupTestAPIKeyStore(t)
 
-	err := store.Create("key-1", "user-1", "first", nil)
+	err := store.Create("key-1", "short-d1", "user-1", "first", nil)
 	if err != nil {
 		t.Fatalf("failed to create key: %v", err)
 	}
-	err = store.Create("key-2", "user-1", "second", nil)
+	err = store.Create("key-2", "short-d2", "user-1", "second", nil)
 	if err != nil {
 		t.Fatalf("failed to create key: %v", err)
 	}
-	err = store.Create("key-3", "user-2", "other", nil)
+	err = store.Create("key-3", "short-d3", "user-2", "other", nil)
 	if err != nil {
 		t.Fatalf("failed to create key: %v", err)
 	}

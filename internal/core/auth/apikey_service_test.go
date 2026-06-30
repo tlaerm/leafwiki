@@ -63,6 +63,11 @@ func TestAPIKeyService_Create(t *testing.T) {
 	if key.ExpiresAt != nil {
 		t.Error("expected nil expires_at")
 	}
+
+	// ID should be a short ID, not a 64-char SHA-256 hash
+	if len(key.ID) > 30 {
+		t.Errorf("expected short ID, got %s (len %d)", key.ID, len(key.ID))
+	}
 }
 
 func TestAPIKeyService_CreateWithExpiration(t *testing.T) {

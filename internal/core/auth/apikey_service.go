@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"time"
+
+	"github.com/perber/wiki/internal/core/shared"
 )
 
 type APIKey struct {
@@ -51,13 +53,17 @@ func (s *APIKeyService) Create(userID, name string, expiresAt *time.Time) (*APIK
 	}
 
 	hashed := hashAPIKey(key)
+	shortID, err := shared.GenerateUniqueID()
+	if err != nil {
+		return nil, err
+	}
 
-	if err := s.store.Create(hashed, userID, name, expiresAt); err != nil {
+	if err := s.store.Create(hashed, shortID, userID, name, expiresAt); err != nil {
 		return nil, err
 	}
 
 	return &APIKey{
-		ID:        hashed,
+		ID:        shortID,
 		Name:      name,
 		UserID:    user.ID,
 		Key:       key,
@@ -107,7 +113,7 @@ func (s *APIKeyService) List(userID string) ([]APIKey, error) {
 	keys := make([]APIKey, 0, len(rows))
 	for _, r := range rows {
 		keys = append(keys, APIKey{
-			ID:         r.ID,
+			ID:         r.ShortID,
 			Name:       r.Name,
 			UserID:     r.UserID,
 			ExpiresAt:  r.ExpiresAt,
@@ -119,14 +125,14 @@ func (s *APIKeyService) List(userID string) ([]APIKey, error) {
 }
 
 func (s *APIKeyService) Revoke(keyID, userID string) error {
-	row, err := s.store.FindByKeyHash(keyID)
+	row, err := s.store.FindByShortID(keyID)
 	if err != nil {
 		return err
 	}
 	if row.UserID != userID {
 		return ErrAPIKeyNotFound
 	}
-	return s.store.Revoke(keyID)
+	return s.store.Revoke(row.ID)
 }
 
 func (s *APIKeyService) DeleteByUser(userID string) error {
