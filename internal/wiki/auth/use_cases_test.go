@@ -1,11 +1,18 @@
 package auth
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
 	coreauth "github.com/perber/wiki/internal/core/auth"
 )
 
@@ -206,5 +213,95 @@ func TestUpdateUser_AdminInvalidRole(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected validation error for invalid role, got nil")
+	}
+}
+
+// TestAPIKeyNameMaxLengthValidation verifies that API key names longer than 100
+// characters are rejected by the gin binding validator.
+func TestAPIKeyNameMaxLengthValidation(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// 101 character name — exceeds the max=100 limit
+	longName := strings.Repeat("x", 101)
+
+	var req struct {
+		Name string `json:"name" binding:"required,max=100"`
+	}
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte(`{"name": "`+longName+`"}`)))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	if err := c.ShouldBindWith(&req, binding.JSON); err == nil {
+		t.Fatal("expected validation error for name > 100 characters, got nil")
+	}
+
+	// Exactly 100 characters should pass
+	exactName := strings.Repeat("x", 100)
+	c2, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c2.Request = httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte(`{"name": "`+exactName+`"}`)))
+	c2.Request.Header.Set("Content-Type", "application/json")
+
+	var req2 struct {
+		Name string `json:"name" binding:"required,max=100"`
+	}
+	if err := c2.ShouldBindWith(&req2, binding.JSON); err != nil {
+		t.Fatalf("expected 100-char name to pass validation, got error: %v", err)
+	}
+}
+
+func TestParseDuration_RejectsSeconds(t *testing.T) {
+	_, err := parseDuration("30s")
+	if err == nil {
+		t.Fatal("expected error for seconds unit, got nil")
+	}
+}
+
+func TestParseDuration_RejectsZeroDuration(t *testing.T) {
+	_, err := parseDuration("0h")
+	if err == nil {
+		t.Fatal("expected error for zero duration, got nil")
+	}
+}
+
+func TestParseDuration_RejectsNegativeDuration(t *testing.T) {
+	_, err := parseDuration("-1h")
+	if err == nil {
+		t.Fatal("expected error for negative duration, got nil")
+	}
+}
+
+func TestParseDuration_ValidUnits(t *testing.T) {
+	now := time.Now()
+	tests := []struct {
+		input string
+		check func(got time.Time) bool
+	}{
+		{"1h", func(got time.Time) bool { return int(got.Sub(now).Hours()) >= 1 }},
+		{"24h", func(got time.Time) bool { return int(got.Sub(now).Hours()) >= 24 }},
+		{"1d", func(got time.Time) bool { return int(got.Sub(now).Hours()) >= 24 }},
+		{"7d", func(got time.Time) bool { return int(got.Sub(now).Hours()) >= 168 }},
+		{"1w", func(got time.Time) bool { return int(got.Sub(now).Hours()) >= 168 }},
+		{"1m", func(got time.Time) bool { return got.After(now.AddDate(0, 1, 0).AddDate(0, -1, 0)) }},
+		{"1y", func(got time.Time) bool { return got.After(now.AddDate(1, 0, 0).AddDate(-1, 0, 0)) }},
+	}
+	for _, tt := range tests {
+		got, err := parseDuration(tt.input)
+		if err != nil {
+			t.Errorf("parseDuration(%q): unexpected error: %v", tt.input, err)
+			continue
+		}
+		if !tt.check(got) {
+			t.Errorf("parseDuration(%q) did not produce expected result: got %v", tt.input, got)
+		}
+	}
+
+	// Verify months use AddDate (calendar months), not fixed 30 days
+	tm, err := parseDuration("2m")
+	if err != nil {
+		t.Fatalf("parseDuration(2m): %v", err)
+	}
+	addDate := now.AddDate(0, 2, 0)
+	if tm.Year() != addDate.Year() || tm.Month() != addDate.Month() {
+		t.Errorf("parseDuration(2m): expected month %d, got %d (AddDate-based)", addDate.Month(), tm.Month())
 	}
 }

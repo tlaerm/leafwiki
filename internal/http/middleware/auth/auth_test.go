@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	coreauth "github.com/perber/wiki/internal/core/auth"
 	authmw "github.com/perber/wiki/internal/http/middleware/auth"
+	"github.com/perber/wiki/internal/http/middleware/security"
 )
 
 type authFixture struct {
@@ -708,6 +709,207 @@ func TestOptionalAuth_NilAuthService_WithToken_Returns500(t *testing.T) {
 	}
 }
 
+func TestRequireAPIKeyAuth_RateLimiting_VaildKeyResetsCounter(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	dir := t.TempDir()
+	apiKeyStore, err := coreauth.NewAPIKeyStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create api key store: %v", err)
+	}
+	t.Cleanup(func() { apiKeyStore.Close() })
+
+	userStore, err := coreauth.NewUserStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create user store: %v", err)
+	}
+	t.Cleanup(func() { userStore.Close() })
+
+	userSvc := coreauth.NewUserService(userStore)
+	if err := userSvc.InitDefaultAdmin("admin"); err != nil {
+		t.Fatalf("failed to init admin: %v", err)
+	}
+
+	apiKeySvc := coreauth.NewAPIKeyService(apiKeyStore, userSvc)
+
+	// Create a valid API key for the admin user
+	adminUser, err := userSvc.GetUserByUsername("admin")
+	if err != nil {
+		t.Fatalf("failed to find admin: %v", err)
+	}
+	key, err := apiKeySvc.Create(adminUser.ID, "test key", nil)
+	if err != nil {
+		t.Fatalf("failed to create api key: %v", err)
+	}
+
+	// Use a small rate limiter with resetOnSuccess=true: 3 attempts per minute
+	// Valid key should always succeed because counter resets on success
+	router := gin.New()
+	router.Use(security.NewRateLimiter(3, time.Minute, true))
+	router.Use(authmw.RequireAPIKeyAuth(apiKeySvc))
+
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	// 10 consecutive valid requests should succeed (counter resets after each)
+	for i := 0; i < 10; i++ {
+		req := httptest.NewRequest("GET", "/test", nil)
+		req.Header.Set("Authorization", "Bearer "+key.Key)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("request %d: expected 200, got %d: %s", i+1, w.Code, w.Body.String())
+		}
+	}
+}
+
+func TestRequireAPIKeyAuth_RateLimiting_InvalidKeyHitsCounter(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	dir := t.TempDir()
+	apiKeyStore, err := coreauth.NewAPIKeyStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create api key store: %v", err)
+	}
+	t.Cleanup(func() { apiKeyStore.Close() })
+
+	userStore, err := coreauth.NewUserStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create user store: %v", err)
+	}
+	t.Cleanup(func() { userStore.Close() })
+
+	userSvc := coreauth.NewUserService(userStore)
+	if err := userSvc.InitDefaultAdmin("admin"); err != nil {
+		t.Fatalf("failed to init admin: %v", err)
+	}
+
+	apiKeySvc := coreauth.NewAPIKeyService(apiKeyStore, userSvc)
+
+	// Use a small rate limiter: 2 attempts per minute for testability
+	router := gin.New()
+	router.Use(security.NewRateLimiter(2, time.Minute, true))
+	router.Use(authmw.RequireAPIKeyAuth(apiKeySvc))
+
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	// 2 invalid requests should hit the rate limiter counter
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest("GET", "/test", nil)
+		req.Header.Set("Authorization", "Bearer lw_invalidkey123")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("request %d: expected 401, got %d: %s", i+1, w.Code, w.Body.String())
+		}
+	}
+
+	// 3rd request should be rate limited
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Authorization", "Bearer lw_invalidkey123")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusTooManyRequests {
+		t.Errorf("expected 429 Too Many Requests, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestRequireAPIKeyAuth_NoBearer_PassesThrough(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	dir := t.TempDir()
+	apiKeyStore, err := coreauth.NewAPIKeyStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create api key store: %v", err)
+	}
+	t.Cleanup(func() { apiKeyStore.Close() })
+
+	userStore, err := coreauth.NewUserStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create user store: %v", err)
+	}
+	t.Cleanup(func() { userStore.Close() })
+
+	userSvc := coreauth.NewUserService(userStore)
+	if err := userSvc.InitDefaultAdmin("admin"); err != nil {
+		t.Fatalf("failed to init admin: %v", err)
+	}
+
+	apiKeySvc := coreauth.NewAPIKeyService(apiKeyStore, userSvc)
+
+	router := gin.New()
+	router.Use(authmw.RequireAPIKeyAuth(apiKeySvc))
+
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 when no Bearer header, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestRequireAPIKeyAuth_MalformedKey_Returns400(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	dir := t.TempDir()
+	apiKeyStore, err := coreauth.NewAPIKeyStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create api key store: %v", err)
+	}
+	t.Cleanup(func() { apiKeyStore.Close() })
+
+	userStore, err := coreauth.NewUserStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create user store: %v", err)
+	}
+	t.Cleanup(func() { userStore.Close() })
+
+	userSvc := coreauth.NewUserService(userStore)
+	if err := userSvc.InitDefaultAdmin("admin"); err != nil {
+		t.Fatalf("failed to init admin: %v", err)
+	}
+
+	apiKeySvc := coreauth.NewAPIKeyService(apiKeyStore, userSvc)
+
+	router := gin.New()
+	router.Use(authmw.RequireAPIKeyAuth(apiKeySvc))
+
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	// Malformed key (no lw_ prefix)
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Authorization", "Bearer not-a-valid-key")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for malformed key, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Valid prefix but non-existent key
+	req = httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Authorization", "Bearer lw_invalidkey")
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for non-existent key, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
 func TestOptionalAuth_UserAlreadyInContext_ShortCircuits(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	authCookies := authmw.NewAuthCookies(true, time.Hour, time.Hour*24)
@@ -734,5 +936,133 @@ func TestOptionalAuth_UserAlreadyInContext_ShortCircuits(t *testing.T) {
 	}
 	if w.Body.String() != `{"username":"proxy"}` {
 		t.Errorf("unexpected body: %s", w.Body.String())
+	}
+}
+
+func TestRequireEditorOrAdmin_AuthDisabled_BlocksAdmin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set("user", &coreauth.User{ID: "admin", Username: "admin", Role: coreauth.RoleAdmin})
+		c.Next()
+	})
+	router.Use(authmw.RequireEditorOrAdmin(true))
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403 when authDisabled=true, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestRequireEditorOrAdmin_AuthDisabled_BlocksEditor(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set("user", &coreauth.User{ID: "public-editor", Username: "public-editor", Role: coreauth.RoleEditor})
+		c.Next()
+	})
+	router.Use(authmw.RequireEditorOrAdmin(true))
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403 when authDisabled=true, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestRequireEditorOrAdmin_AdminPasses(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set("user", &coreauth.User{ID: "admin", Username: "admin", Role: coreauth.RoleAdmin})
+		c.Next()
+	})
+	router.Use(authmw.RequireEditorOrAdmin(false))
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 for admin, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestRequireEditorOrAdmin_EditorPasses(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set("user", &coreauth.User{ID: "editor", Username: "editor", Role: coreauth.RoleEditor})
+		c.Next()
+	})
+	router.Use(authmw.RequireEditorOrAdmin(false))
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 for editor, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestRequireEditorOrAdmin_ViewerBlocked(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set("user", &coreauth.User{ID: "viewer", Username: "viewer", Role: coreauth.RoleViewer})
+		c.Next()
+	})
+	router.Use(authmw.RequireEditorOrAdmin(false))
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403 for viewer, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestRequireEditorOrAdmin_NoUser_Blocked(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := gin.New()
+	router.Use(authmw.RequireEditorOrAdmin(false))
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403 for no user, got %d: %s", w.Code, w.Body.String())
 	}
 }

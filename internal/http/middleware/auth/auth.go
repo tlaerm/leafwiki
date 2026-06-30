@@ -27,6 +27,10 @@ func RequireAPIKeyAuth(apikeyService *auth.APIKeyService) gin.HandlerFunc {
 
 		user, err := apikeyService.Authenticate(apiKey)
 		if err != nil {
+			if err == auth.ErrAPIKeyMalformed {
+				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Malformed API key"})
+				return
+			}
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid API key"})
 			return
 		}
@@ -168,8 +172,14 @@ func OptionalAuth(authService *auth.AuthService, authCookies *AuthCookies) gin.H
 	}
 }
 
-func RequireEditorOrAdmin() gin.HandlerFunc {
+func RequireEditorOrAdmin(authDisabled bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Editor/Admin operations are not available when authentication is disabled
+		if authDisabled {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Editor/Admin operations are not available when authentication is disabled"})
+			return
+		}
+
 		userValue, exists := c.Get("user")
 		if !exists {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "User not authenticated"})

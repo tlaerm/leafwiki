@@ -246,17 +246,21 @@ type DeleteUserInput struct{ ID string }
 
 type DeleteUserUseCase struct {
 	user     *coreauth.UserService
+	apiKey   *coreauth.APIKeyService
 	resolver *coreauth.UserResolver
 	log      *slog.Logger
 }
 
-func NewDeleteUserUseCase(u *coreauth.UserService, r *coreauth.UserResolver, log *slog.Logger) *DeleteUserUseCase {
-	return &DeleteUserUseCase{user: u, resolver: r, log: log}
+func NewDeleteUserUseCase(u *coreauth.UserService, apiKey *coreauth.APIKeyService, r *coreauth.UserResolver, log *slog.Logger) *DeleteUserUseCase {
+	return &DeleteUserUseCase{user: u, apiKey: apiKey, resolver: r, log: log}
 }
 
 func (uc *DeleteUserUseCase) Execute(_ context.Context, in DeleteUserInput) error {
 	if err := uc.user.DeleteUser(in.ID); err != nil {
 		return err
+	}
+	if err := uc.apiKey.DeleteByUser(in.ID); err != nil {
+		log.Printf("warning: could not delete API keys for user %s: %v", in.ID, err)
 	}
 	if err := uc.resolver.Reload(); err != nil {
 		log.Printf("warning: could not reload user resolver cache: %v", err)

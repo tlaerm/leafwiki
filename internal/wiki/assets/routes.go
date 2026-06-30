@@ -74,10 +74,10 @@ func (r *Routes) RegisterRoutes(ctx httpinternal.RouterContext) {
 		security.CSRFMiddleware(ctx.CSRFCookie),
 	)
 
-	authGroup.POST("/pages/:id/assets", authmw.RequireEditorOrAdmin(), r.handleUpload(opts.MaxAssetUploadSizeBytes))
-	authGroup.GET("/pages/:id/assets", authmw.RequireEditorOrAdmin(), r.handleList)
-	authGroup.PUT("/pages/:id/assets/rename", authmw.RequireEditorOrAdmin(), r.handleRename)
-	authGroup.DELETE("/pages/:id/assets/:name", authmw.RequireEditorOrAdmin(), r.handleDelete)
+	authGroup.POST("/pages/:id/assets", authmw.RequireEditorOrAdmin(opts.AuthDisabled), r.handleUpload(opts.MaxAssetUploadSizeBytes))
+	authGroup.GET("/pages/:id/assets", authmw.RequireEditorOrAdmin(opts.AuthDisabled), r.handleList)
+	authGroup.PUT("/pages/:id/assets/rename", authmw.RequireEditorOrAdmin(opts.AuthDisabled), r.handleRename)
+	authGroup.DELETE("/pages/:id/assets/:name", authmw.RequireEditorOrAdmin(opts.AuthDisabled), r.handleDelete)
 }
 
 // ─── Handlers ───────────────────────────────────────────────────────────────

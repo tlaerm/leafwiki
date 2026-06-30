@@ -65,10 +65,10 @@ func (r *Routes) RegisterRoutes(ctx httpinternal.RouterContext) {
 		security.CSRFMiddleware(ctx.CSRFCookie),
 	)
 
-	authGroup.POST("/import/plan", authmw.RequireEditorOrAdmin(), r.handleCreatePlan)
-	authGroup.GET("/import/plan", authmw.RequireEditorOrAdmin(), r.handleGetPlan)
-	authGroup.POST("/import/execute", authmw.RequireEditorOrAdmin(), r.handleExecute)
-	authGroup.DELETE("/import/plan", authmw.RequireEditorOrAdmin(), r.handleClearPlan)
+	authGroup.POST("/import/plan", authmw.RequireEditorOrAdmin(opts.AuthDisabled), r.handleCreatePlan)
+	authGroup.GET("/import/plan", authmw.RequireEditorOrAdmin(opts.AuthDisabled), r.handleGetPlan)
+	authGroup.POST("/import/execute", authmw.RequireEditorOrAdmin(opts.AuthDisabled), r.handleExecute)
+	authGroup.DELETE("/import/plan", authmw.RequireEditorOrAdmin(opts.AuthDisabled), r.handleClearPlan)
 }
 
 // ─── Handlers ───────────────────────────────────────────────────────────────

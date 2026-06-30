@@ -362,7 +362,7 @@ func (w *Wiki) buildAuthRoutes() *wikiauth.Routes {
 		CreateUser:        wikiauth.NewCreateUserUseCase(w.user, w.userResolver, w.log),
 		UpdateUser:        wikiauth.NewUpdateUserUseCase(w.user, w.userResolver, w.log),
 		ChangeOwnPassword: wikiauth.NewChangeOwnPasswordUseCase(w.user),
-		DeleteUser:        wikiauth.NewDeleteUserUseCase(w.user, w.userResolver, w.log),
+		DeleteUser:        wikiauth.NewDeleteUserUseCase(w.user, w.apiKey, w.userResolver, w.log),
 		GetUsers:          wikiauth.NewGetUsersUseCase(w.user),
 		GetUserByID:       wikiauth.NewGetUserByIDUseCase(w.user),
 		AuthService:       w.auth,
@@ -623,6 +623,9 @@ func (w *Wiki) Close() error {
 		if firstErr == nil {
 			firstErr = err
 		}
+	}
+	if err := w.apiKey.Close(); err != nil {
+		return err
 	}
 
 	if w.links != nil {

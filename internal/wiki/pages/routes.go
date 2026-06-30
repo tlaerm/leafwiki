@@ -117,18 +117,18 @@ func (r *Routes) RegisterRoutes(ctx httpinternal.RouterContext) {
 		authGroup.GET("/pages/permalink/:id", r.handleResolvePermalink)
 	}
 
-	authGroup.GET("/pages/slug-suggestion", authmw.RequireEditorOrAdmin(), r.handleSuggestSlug)
-	authGroup.POST("/pages", authmw.RequireEditorOrAdmin(), r.handleCreate)
-	authGroup.PUT("/pages/:id", authmw.RequireEditorOrAdmin(), r.handleUpdate)
-	authGroup.DELETE("/pages/:id", authmw.RequireEditorOrAdmin(), r.handleDelete)
-	authGroup.PUT("/pages/:id/move", authmw.RequireEditorOrAdmin(), r.handleMove)
-	authGroup.PUT("/pages/:id/sort", authmw.RequireEditorOrAdmin(), r.handleSort)
-	authGroup.POST("/pages/ensure", authmw.RequireEditorOrAdmin(), r.handleEnsurePath)
-	authGroup.POST("/pages/convert/:id", authmw.RequireEditorOrAdmin(), r.handleConvert)
-	authGroup.POST("/pages/copy/:id", authmw.RequireEditorOrAdmin(), r.handleCopy)
+	authGroup.GET("/pages/slug-suggestion", authmw.RequireEditorOrAdmin(opts.AuthDisabled), r.handleSuggestSlug)
+	authGroup.POST("/pages", authmw.RequireEditorOrAdmin(opts.AuthDisabled), r.handleCreate)
+	authGroup.PUT("/pages/:id", authmw.RequireEditorOrAdmin(opts.AuthDisabled), r.handleUpdate)
+	authGroup.DELETE("/pages/:id", authmw.RequireEditorOrAdmin(opts.AuthDisabled), r.handleDelete)
+	authGroup.PUT("/pages/:id/move", authmw.RequireEditorOrAdmin(opts.AuthDisabled), r.handleMove)
+	authGroup.PUT("/pages/:id/sort", authmw.RequireEditorOrAdmin(opts.AuthDisabled), r.handleSort)
+	authGroup.POST("/pages/ensure", authmw.RequireEditorOrAdmin(opts.AuthDisabled), r.handleEnsurePath)
+	authGroup.POST("/pages/convert/:id", authmw.RequireEditorOrAdmin(opts.AuthDisabled), r.handleConvert)
+	authGroup.POST("/pages/copy/:id", authmw.RequireEditorOrAdmin(opts.AuthDisabled), r.handleCopy)
 	if opts.EnableLinkRefactor {
-		authGroup.POST("/pages/:id/refactor/preview", authmw.RequireEditorOrAdmin(), r.handleRefactorPreview)
-		authGroup.POST("/pages/:id/refactor/apply", authmw.RequireEditorOrAdmin(), r.handleRefactorApply)
+		authGroup.POST("/pages/:id/refactor/preview", authmw.RequireEditorOrAdmin(opts.AuthDisabled), r.handleRefactorPreview)
+		authGroup.POST("/pages/:id/refactor/apply", authmw.RequireEditorOrAdmin(opts.AuthDisabled), r.handleRefactorApply)
 	}
 }
 

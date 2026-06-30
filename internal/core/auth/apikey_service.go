@@ -5,8 +5,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"time"
+
+	"github.com/perber/wiki/internal/core/shared"
 )
+
+const MaxAPIKeysPerUser = 20
 
 type APIKey struct {
 	ID         string     `json:"id"`
@@ -45,19 +50,31 @@ func (s *APIKeyService) Create(userID, name string, expiresAt *time.Time) (*APIK
 		return nil, fmt.Errorf("user not found: %w", err)
 	}
 
+	count, err := s.store.CountByUser(userID)
+	if err != nil {
+		return nil, err
+	}
+	if count >= MaxAPIKeysPerUser {
+		return nil, ErrAPIKeyLimitExceeded
+	}
+
 	key, err := generateAPIKey()
 	if err != nil {
 		return nil, err
 	}
 
 	hashed := hashAPIKey(key)
+	shortID, err := shared.GenerateUniqueID()
+	if err != nil {
+		return nil, err
+	}
 
-	if err := s.store.Create(hashed, userID, name, expiresAt); err != nil {
+	if err := s.store.Create(hashed, shortID, userID, name, expiresAt); err != nil {
 		return nil, err
 	}
 
 	return &APIKey{
-		ID:        hashed,
+		ID:        shortID,
 		Name:      name,
 		UserID:    user.ID,
 		Key:       key,
@@ -67,6 +84,10 @@ func (s *APIKeyService) Create(userID, name string, expiresAt *time.Time) (*APIK
 }
 
 func (s *APIKeyService) Authenticate(key string) (*User, error) {
+	if !strings.HasPrefix(key, "lw_") {
+		return nil, ErrAPIKeyMalformed
+	}
+
 	hashed := hashAPIKey(key)
 
 	row, err := s.store.FindByKeyHash(hashed)
@@ -107,7 +128,7 @@ func (s *APIKeyService) List(userID string) ([]APIKey, error) {
 	keys := make([]APIKey, 0, len(rows))
 	for _, r := range rows {
 		keys = append(keys, APIKey{
-			ID:         r.ID,
+			ID:         r.ShortID,
 			Name:       r.Name,
 			UserID:     r.UserID,
 			ExpiresAt:  r.ExpiresAt,
@@ -119,14 +140,14 @@ func (s *APIKeyService) List(userID string) ([]APIKey, error) {
 }
 
 func (s *APIKeyService) Revoke(keyID, userID string) error {
-	row, err := s.store.FindByKeyHash(keyID)
+	row, err := s.store.FindByShortID(keyID)
 	if err != nil {
 		return err
 	}
 	if row.UserID != userID {
 		return ErrAPIKeyNotFound
 	}
-	return s.store.Revoke(keyID)
+	return s.store.Revoke(row.ID)
 }
 
 func (s *APIKeyService) DeleteByUser(userID string) error {

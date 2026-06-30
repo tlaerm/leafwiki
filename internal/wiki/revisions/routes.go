@@ -75,7 +75,7 @@ func (r *Routes) RegisterRoutes(ctx httpinternal.RouterContext) {
 		authGroup.GET("/pages/:id/revisions/compare", r.handleCompareRevisions)
 		authGroup.GET("/pages/:id/revisions/:revisionId/assets/*name", r.handleGetRevisionAsset)
 		authGroup.GET("/pages/:id/revisions/:revisionId", r.handleGetRevision)
-		authGroup.POST("/pages/:id/revisions/:revisionId/restore", authmw.RequireEditorOrAdmin(), r.handleRestoreRevision)
+		authGroup.POST("/pages/:id/revisions/:revisionId/restore", authmw.RequireEditorOrAdmin(opts.AuthDisabled), r.handleRestoreRevision)
 	}
 
 }
