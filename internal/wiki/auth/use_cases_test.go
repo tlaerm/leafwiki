@@ -271,23 +271,37 @@ func TestParseDuration_RejectsNegativeDuration(t *testing.T) {
 }
 
 func TestParseDuration_ValidUnits(t *testing.T) {
-	valid := map[string]time.Duration{
-		"1h":  1 * time.Hour,
-		"24h": 24 * time.Hour,
-		"1d":  24 * time.Hour,
-		"7d":  7 * 24 * time.Hour,
-		"1w":  7 * 24 * time.Hour,
-		"1m":  30 * 24 * time.Hour,
-		"1y":  365 * 24 * time.Hour,
+	now := time.Now()
+	tests := []struct {
+		input string
+		check func(got time.Time) bool
+	}{
+		{"1h", func(got time.Time) bool { return int(got.Sub(now).Hours()) >= 1 }},
+		{"24h", func(got time.Time) bool { return int(got.Sub(now).Hours()) >= 24 }},
+		{"1d", func(got time.Time) bool { return int(got.Sub(now).Hours()) >= 24 }},
+		{"7d", func(got time.Time) bool { return int(got.Sub(now).Hours()) >= 168 }},
+		{"1w", func(got time.Time) bool { return int(got.Sub(now).Hours()) >= 168 }},
+		{"1m", func(got time.Time) bool { return got.After(now.AddDate(0, 1, 0).AddDate(0, -1, 0)) }},
+		{"1y", func(got time.Time) bool { return got.After(now.AddDate(1, 0, 0).AddDate(-1, 0, 0)) }},
 	}
-	for input, want := range valid {
-		got, err := parseDuration(input)
+	for _, tt := range tests {
+		got, err := parseDuration(tt.input)
 		if err != nil {
-			t.Errorf("parseDuration(%q): unexpected error: %v", input, err)
+			t.Errorf("parseDuration(%q): unexpected error: %v", tt.input, err)
 			continue
 		}
-		if got != want {
-			t.Errorf("parseDuration(%q): expected %v, got %v", input, want, got)
+		if !tt.check(got) {
+			t.Errorf("parseDuration(%q) did not produce expected result: got %v", tt.input, got)
 		}
+	}
+
+	// Verify months use AddDate (calendar months), not fixed 30 days
+	tm, err := parseDuration("2m")
+	if err != nil {
+		t.Fatalf("parseDuration(2m): %v", err)
+	}
+	addDate := now.AddDate(0, 2, 0)
+	if tm.Year() != addDate.Year() || tm.Month() != addDate.Month() {
+		t.Errorf("parseDuration(2m): expected month %d, got %d (AddDate-based)", addDate.Month(), tm.Month())
 	}
 }

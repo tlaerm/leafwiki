@@ -384,12 +384,12 @@ func (r *Routes) handleCreateAPIKey(c *gin.Context) {
 
 	var expiresAt *time.Time
 	if req.ExpiresIn != nil && *req.ExpiresIn != "" {
-		d, err := parseDuration(*req.ExpiresIn)
+		t, err := parseDuration(*req.ExpiresIn)
 		if err != nil {
 			respondWithAuthStatusError(c, http.StatusBadRequest, ErrCodeAuthInvalidRequest, "Invalid duration format (e.g. 30d, 90d)", "invalid duration")
 			return
 		}
-		expiresAt = timePtr(time.Now().Add(d))
+		expiresAt = &t
 	}
 
 	out, err := r.apiKeyService.Create(user.ID, req.Name, expiresAt)
@@ -455,34 +455,33 @@ func (r *Routes) handleRevokeAPIKey(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-func parseDuration(s string) (time.Duration, error) {
+func parseDuration(s string) (time.Time, error) {
 	if len(s) < 2 {
-		return 0, fmt.Errorf("invalid duration: %s", s)
+		return time.Time{}, fmt.Errorf("invalid duration: %s", s)
 	}
 	unit := s[len(s)-1:]
 	n, err := strconv.Atoi(s[:len(s)-1])
 	if err != nil {
-		return 0, fmt.Errorf("invalid duration: %s", s)
+		return time.Time{}, fmt.Errorf("invalid duration: %s", s)
 	}
 	if n <= 0 {
-		return 0, fmt.Errorf("duration must be a positive integer: %s", s)
+		return time.Time{}, fmt.Errorf("duration must be a positive integer: %s", s)
 	}
+	now := time.Now()
 	switch unit {
-	case "d":
-		return time.Duration(n) * 24 * time.Hour, nil
 	case "h":
-		return time.Duration(n) * time.Hour, nil
+		return now.Add(time.Duration(n) * time.Hour), nil
+	case "d":
+		return now.AddDate(0, 0, n), nil
 	case "w":
-		return time.Duration(n) * 7 * 24 * time.Hour, nil
+		return now.AddDate(0, 0, n*7), nil
 	case "m":
-		return time.Duration(n) * 30 * 24 * time.Hour, nil
+		return now.AddDate(0, n, 0), nil
 	case "y":
-		return time.Duration(n) * 365 * 24 * time.Hour, nil
+		return now.AddDate(n, 0, 0), nil
 	default:
-		return 0, fmt.Errorf("unsupported duration unit: %s", s)
+		return time.Time{}, fmt.Errorf("unsupported duration unit: %s", s)
 	}
 }
 
-func timePtr(t time.Time) *time.Time {
-	return &t
-}
+
