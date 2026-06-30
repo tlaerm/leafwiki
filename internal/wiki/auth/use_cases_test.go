@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
@@ -245,5 +246,48 @@ func TestAPIKeyNameMaxLengthValidation(t *testing.T) {
 	}
 	if err := c2.ShouldBindWith(&req2, binding.JSON); err != nil {
 		t.Fatalf("expected 100-char name to pass validation, got error: %v", err)
+	}
+}
+
+func TestParseDuration_RejectsSeconds(t *testing.T) {
+	_, err := parseDuration("30s")
+	if err == nil {
+		t.Fatal("expected error for seconds unit, got nil")
+	}
+}
+
+func TestParseDuration_RejectsZeroDuration(t *testing.T) {
+	_, err := parseDuration("0h")
+	if err == nil {
+		t.Fatal("expected error for zero duration, got nil")
+	}
+}
+
+func TestParseDuration_RejectsNegativeDuration(t *testing.T) {
+	_, err := parseDuration("-1h")
+	if err == nil {
+		t.Fatal("expected error for negative duration, got nil")
+	}
+}
+
+func TestParseDuration_ValidUnits(t *testing.T) {
+	valid := map[string]time.Duration{
+		"1h":  1 * time.Hour,
+		"24h": 24 * time.Hour,
+		"1d":  24 * time.Hour,
+		"7d":  7 * 24 * time.Hour,
+		"1w":  7 * 24 * time.Hour,
+		"1m":  30 * 24 * time.Hour,
+		"1y":  365 * 24 * time.Hour,
+	}
+	for input, want := range valid {
+		got, err := parseDuration(input)
+		if err != nil {
+			t.Errorf("parseDuration(%q): unexpected error: %v", input, err)
+			continue
+		}
+		if got != want {
+			t.Errorf("parseDuration(%q): expected %v, got %v", input, want, got)
+		}
 	}
 }
