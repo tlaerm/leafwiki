@@ -40,9 +40,21 @@ export function CreateApiKeyDialog() {
     return true
   }
 
-  const handleCopyKey = () => {
-    if (createdKey) {
-      navigator.clipboard.writeText(createdKey)
+  const handleCopyKey = async () => {
+    if (!createdKey) return
+    try {
+      await navigator.clipboard.writeText(createdKey)
+      toast.success(t('keyCopied'))
+    } catch {
+      // Fallback: select text in a textarea
+      const ta = document.createElement('textarea')
+      ta.value = createdKey
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
       toast.success(t('keyCopied'))
     }
   }

@@ -52,7 +52,6 @@ export function RevokeApiKeyDialog({ keyId, keyName }: RevokeApiKeyDialogProps) 
         },
       ]}
     >
-      <p className="text-sm text-muted-foreground">{t('revokeConfirmDescription')}</p>
       <p className="mt-2 font-medium">{keyName}</p>
     </BaseDialog>
   )
