@@ -1,4 +1,5 @@
 import BaseDialog from '@/components/BaseDialog'
+import { Button } from '@/components/ui/button'
 import { DIALOG_CREATE_API_KEY } from '@/lib/registries'
 import { useAPIKeysStore } from '@/stores/apikeys'
 import { useState } from 'react'
@@ -13,20 +14,30 @@ export function CreateApiKeyDialog() {
   const [createdKey, setCreatedKey] = useState<string | null>(null)
   const { t } = useTranslation('apikeys')
 
-  const handleCreate = async (): Promise<boolean> => {
+  const handleCreate = async (type: string): Promise<boolean> => {
+    if (type === 'done') {
+      return true
+    }
     if (!name.trim()) return false
     setLoading(true)
     try {
       const result = await createKey(name.trim(), expiresIn || undefined)
       setCreatedKey(result.key)
       toast.success(t('createSuccess'))
-      return true
+      return false
     } catch {
       toast.error(t('createError'))
       return false
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleClose = () => {
+    setCreatedKey(null)
+    setName('')
+    setExpiresIn('')
+    return true
   }
 
   const handleCopyKey = () => {
@@ -41,7 +52,7 @@ export function CreateApiKeyDialog() {
       dialogType={DIALOG_CREATE_API_KEY}
       dialogTitle={t('createKey')}
       dialogDescription={t('description')}
-      onClose={() => true}
+      onClose={handleClose}
       onConfirm={handleCreate}
       defaultAction="cancel"
       cancelButton={{
@@ -50,14 +61,24 @@ export function CreateApiKeyDialog() {
         disabled: loading,
         autoFocus: true,
       }}
-      buttons={[
-        {
-          label: loading ? 'Creating...' : t('createKey'),
-          actionType: 'confirm',
-          loading,
-          disabled: loading || !name.trim(),
-        },
-      ]}
+      buttons={
+        createdKey
+          ? [
+              {
+                label: 'Done',
+                actionType: 'done',
+                autoFocus: true,
+              },
+            ]
+          : [
+              {
+                label: loading ? 'Creating...' : t('createKey'),
+                actionType: 'confirm',
+                loading,
+                disabled: loading || !name.trim(),
+              },
+            ]
+      }
     >
       {createdKey ? (
         <div className="space-y-3">
@@ -66,12 +87,9 @@ export function CreateApiKeyDialog() {
             <code className="flex-1 rounded-md border bg-muted p-3 text-sm break-all">
               {createdKey}
             </code>
-            <button
-              onClick={handleCopyKey}
-              className="rounded-md border px-3 py-2 text-sm hover:bg-accent"
-            >
+            <Button variant="outline" onClick={handleCopyKey}>
               {t('copyKey')}
-            </button>
+            </Button>
           </div>
         </div>
       ) : (

@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/button'
 import { mapApiError } from '@/lib/api/errors'
 import { DIALOG_CREATE_API_KEY, DIALOG_REVOKE_API_KEY } from '@/lib/registries'
 import { useAPIKeysStore } from '@/stores/apikeys'
@@ -36,67 +37,79 @@ export default function APIKeyManagement() {
 
   return (
     <div className="settings">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="settings__title">{t('pageTitle')}</h1>
-          <p className="text-muted-foreground">{t('description')}</p>
-        </div>
-        <button
-          onClick={handleCreate}
-          className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground hover:bg-primary/90"
-        >
-          {t('createKey')}
-        </button>
+      <h1 className="settings__title">{t('pageTitle')}</h1>
+      <p className="text-muted-foreground mb-4">{t('description')}</p>
+
+      <div className="settings__header-actions">
+        <Button onClick={handleCreate}>{t('createKey')}</Button>
       </div>
 
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
+      <div className="settings__table-card">
+        <div className="settings__table-scroll">
+          <table className="settings__table">
+            <thead className="settings__table-head">
+              <tr>
+                <th className="settings__table-header-cell">{t('name')}</th>
+                <th className="settings__table-header-cell">{t('createdAt')}</th>
+                <th className="settings__table-header-cell">{t('expiresAt')}</th>
+                <th className="settings__table-header-cell">{t('lastUsed')}</th>
+                <th className="settings__table-header-cell">{t('revoke')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading && (
+                <tr>
+                  <td colSpan={5} className="settings__table-body-message">
+                    Loading...
+                  </td>
+                </tr>
+              )}
+              {!loading && keys.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="settings__table-body-message">
+                    {t('noKeys')}
+                  </td>
+                </tr>
+              )}
+              {!loading &&
+                keys.map((key) => (
+                  <tr key={key.id} className="settings__table-row">
+                    <td className="settings__table-cell">{key.name}</td>
+                    <td className="settings__table-cell">{formatDate(key.createdAt)}</td>
+                    <td className="settings__table-cell">
+                      {key.expiresAt ? (
+                        formatDate(key.expiresAt)
+                      ) : (
+                        <span className="settings__pill settings__role-pill--default">
+                          {t('expiresNever')}
+                        </span>
+                      )}
+                    </td>
+                    <td className="settings__table-cell">
+                      {key.lastUsedAt ? (
+                        formatDate(key.lastUsedAt)
+                      ) : (
+                        <span className="text-muted-foreground">{t('neverUsed')}</span>
+                      )}
+                    </td>
+                    <td className="settings__actions-cell">
+                      <div className="settings__actions">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                          onClick={() => handleRevoke(key.id, key.name)}
+                        >
+                          {t('revoke')}
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
         </div>
-      ) : keys.length === 0 ? (
-        <div className="rounded-lg border border-dashed p-8 text-center">
-          <p className="text-muted-foreground">{t('noKeys')}</p>
-          <p className="text-sm text-muted-foreground mt-1">{t('noKeysDescription')}</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {keys.map((key) => (
-            <div
-              key={key.id}
-              className="flex items-center justify-between rounded-lg border p-4"
-            >
-              <div>
-                <p className="font-medium">{key.name}</p>
-                <div className="flex gap-4 text-sm text-muted-foreground mt-1">
-                  <span>
-                    {t('createdAt')}: {formatDate(key.createdAt)}
-                  </span>
-                  {key.lastUsedAt ? (
-                    <span>
-                      {t('lastUsed')}: {formatDate(key.lastUsedAt)}
-                    </span>
-                  ) : (
-                    <span>{t('neverUsed')}</span>
-                  )}
-                  {key.expiresAt ? (
-                    <span>
-                      {t('expiresAt')}: {formatDate(key.expiresAt)}
-                    </span>
-                  ) : (
-                    <span>{t('expiresNever')}</span>
-                  )}
-                </div>
-              </div>
-              <button
-                onClick={() => handleRevoke(key.id, key.name)}
-                className="rounded-md border border-destructive px-3 py-1.5 text-sm text-destructive hover:bg-destructive hover:text-destructive-foreground"
-              >
-                {t('revoke')}
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+      </div>
     </div>
   )
 }
