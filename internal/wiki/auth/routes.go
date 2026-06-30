@@ -435,7 +435,11 @@ func (r *Routes) handleListAPIKeys(c *gin.Context) {
 
 func (r *Routes) handleRevokeAPIKey(c *gin.Context) {
 	id := c.Param("id")
-	if err := r.apiKeyService.Revoke(id); err != nil {
+	user := authmw.MustGetUser(c)
+	if user == nil {
+		return
+	}
+	if err := r.apiKeyService.Revoke(id, user.ID); err != nil {
 		if errors.Is(err, coreauth.ErrAPIKeyNotFound) {
 			respondWithAuthStatusError(c, http.StatusNotFound, ErrCodeAuthUserNotFound, "API key not found", "api key not found")
 			return

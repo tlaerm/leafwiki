@@ -118,7 +118,14 @@ func (s *APIKeyService) List(userID string) ([]APIKey, error) {
 	return keys, nil
 }
 
-func (s *APIKeyService) Revoke(keyID string) error {
+func (s *APIKeyService) Revoke(keyID, userID string) error {
+	row, err := s.store.FindByKeyHash(keyID)
+	if err != nil {
+		return err
+	}
+	if row.UserID != userID {
+		return ErrAPIKeyNotFound
+	}
 	return s.store.Revoke(keyID)
 }
 

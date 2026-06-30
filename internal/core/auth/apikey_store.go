@@ -128,7 +128,7 @@ func (s *APIKeyStore) ListByUser(userID string) ([]APIKeyRow, error) {
 	rows, err := s.db.Query(`
 		SELECT id, user_id, name, expires_at, created_at, last_used_at, revoked_at
 		FROM api_keys
-		WHERE user_id = ?
+		WHERE user_id = ? AND revoked_at IS NULL
 		ORDER BY created_at DESC;
 	`, userID)
 	if err != nil {

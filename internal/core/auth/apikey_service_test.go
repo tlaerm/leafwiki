@@ -117,7 +117,7 @@ func TestAPIKeyService_AuthenticateRevokedKey(t *testing.T) {
 		t.Fatalf("failed to create api key: %v", err)
 	}
 
-	err = apiKeySvc.Revoke(key.ID)
+	err = apiKeySvc.Revoke(key.ID, userID)
 	if err != nil {
 		t.Fatalf("failed to revoke key: %v", err)
 	}
@@ -176,7 +176,7 @@ func TestAPIKeyService_Revoke(t *testing.T) {
 		t.Fatalf("failed to create key: %v", err)
 	}
 
-	err = apiKeySvc.Revoke(key.ID)
+	err = apiKeySvc.Revoke(key.ID, userID)
 	if err != nil {
 		t.Fatalf("failed to revoke key: %v", err)
 	}
@@ -184,6 +184,57 @@ func TestAPIKeyService_Revoke(t *testing.T) {
 	_, err = apiKeySvc.Authenticate(key.Key)
 	if err != ErrAPIKeyRevoked {
 		t.Errorf("expected ErrAPIKeyRevoked after revoke, got %v", err)
+	}
+}
+
+func TestAPIKeyService_ListExcludesRevoked(t *testing.T) {
+	apiKeySvc, userSvc := setupTestAPIKeyService(t)
+	userID := createUserForTests(t, userSvc)
+
+	_, err := apiKeySvc.Create(userID, "key 1", nil)
+	if err != nil {
+		t.Fatalf("failed to create key: %v", err)
+	}
+	key2, err := apiKeySvc.Create(userID, "key 2", nil)
+	if err != nil {
+		t.Fatalf("failed to create key: %v", err)
+	}
+	_, err = apiKeySvc.Create(userID, "key 3", nil)
+	if err != nil {
+		t.Fatalf("failed to create key: %v", err)
+	}
+
+	err = apiKeySvc.Revoke(key2.ID, userID)
+	if err != nil {
+		t.Fatalf("failed to revoke key: %v", err)
+	}
+
+	keys, err := apiKeySvc.List(userID)
+	if err != nil {
+		t.Fatalf("failed to list keys: %v", err)
+	}
+
+	if len(keys) != 2 {
+		t.Errorf("expected 2 keys (revoked excluded), got %d", len(keys))
+	}
+}
+
+func TestAPIKeyService_RevokeWrongOwner(t *testing.T) {
+	apiKeySvc, userSvc := setupTestAPIKeyService(t)
+	userID := createUserForTests(t, userSvc)
+	otherUser, err := userSvc.CreateUser("otheruser", "other@example.com", "password123", "editor")
+	if err != nil {
+		t.Fatalf("failed to create other user: %v", err)
+	}
+
+	key, err := apiKeySvc.Create(userID, "other key", nil)
+	if err != nil {
+		t.Fatalf("failed to create key: %v", err)
+	}
+
+	err = apiKeySvc.Revoke(key.ID, otherUser.ID)
+	if err != ErrAPIKeyNotFound {
+		t.Errorf("expected ErrAPIKeyNotFound when revoking another user's key, got %v", err)
 	}
 }
 
