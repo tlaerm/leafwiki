@@ -66,15 +66,14 @@ test.describe('API Keys', () => {
 
   test('viewer cannot create API keys', async ({ request }) => {
     // Login as admin and create a viewer user
-    const adminCtx = await request.newContext();
-    const loginResp = await adminCtx.post('/api/auth/login', {
+    const adminLoginResp = await request.post('/api/auth/login', {
       data: { identifier: user, password },
     });
-    expect(loginResp.status()).toBe(200);
+    expect(adminLoginResp.status()).toBe(200);
 
-    const adminCsrf = loginResp.headers()['x-csrf-token'];
+    const adminCsrf = adminLoginResp.headers()['x-csrf-token'];
 
-    const createUserResp = await adminCtx.post('/api/users', {
+    const createUserResp = await request.post('/api/users', {
       data: { username: 'e2e-viewer', email: 'viewer@test.com', password: 'viewerpass123', role: 'viewer' },
       headers: {
         'X-CSRF-Token': adminCsrf,
@@ -83,8 +82,7 @@ test.describe('API Keys', () => {
     expect(createUserResp.status()).toBe(201);
 
     // Login as viewer
-    const viewerCtx = await request.newContext();
-    const viewerLoginResp = await viewerCtx.post('/api/auth/login', {
+    const viewerLoginResp = await request.post('/api/auth/login', {
       data: { identifier: 'e2e-viewer', password: 'viewerpass123' },
     });
     expect(viewerLoginResp.status()).toBe(200);
@@ -92,7 +90,7 @@ test.describe('API Keys', () => {
     const viewerCsrf = viewerLoginResp.headers()['x-csrf-token'];
 
     // Viewer tries to create API key - should be rejected
-    const createKeyResp = await viewerCtx.post('/api/apikeys', {
+    const createKeyResp = await request.post('/api/apikeys', {
       data: { name: 'viewer-key' },
       headers: {
         'X-CSRF-Token': viewerCsrf,
@@ -100,10 +98,16 @@ test.describe('API Keys', () => {
     });
     expect(createKeyResp.status()).toBe(403);
 
-    // Cleanup - delete viewer as admin
-    await adminCtx.delete('/api/users/e2e-viewer', {
+    // Re-login as admin to clean up
+    const adminLoginResp2 = await request.post('/api/auth/login', {
+      data: { identifier: user, password },
+    });
+    expect(adminLoginResp2.status()).toBe(200);
+
+    const adminCsrf2 = adminLoginResp2.headers()['x-csrf-token'];
+    await request.delete('/api/users/e2e-viewer', {
       headers: {
-        'X-CSRF-Token': adminCsrf,
+        'X-CSRF-Token': adminCsrf2,
       },
     });
   });
