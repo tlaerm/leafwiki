@@ -4,19 +4,21 @@ const user = process.env.E2E_ADMIN_USER || 'admin';
 const password = process.env.E2E_ADMIN_PASSWORD || 'admin';
 
 test.describe('API Keys', () => {
-  test('admin can create an API key and use it to authenticate', async ({ page, request }) => {
+  test('admin can create an API key and use it to authenticate', async ({ request }) => {
     // Login
     const loginResp = await request.post('/api/auth/login', {
       data: { identifier: user, password },
     });
     expect(loginResp.status()).toBe(200);
 
+    // Get CSRF token from response header
+    const csrf = loginResp.headers()['x-csrf-token'];
+
     // Create API key
-    const csrf = await page.context().cookies().find(c => c.name === '_csrf');
     const createResp = await request.post('/api/apikeys', {
       data: { name: 'e2e-test-key' },
       headers: {
-        'X-CSRF-Token': csrf?.value || '',
+        'X-CSRF-Token': csrf,
       },
     });
     expect(createResp.status()).toBe(201);
@@ -51,7 +53,7 @@ test.describe('API Keys', () => {
         'Authorization': `Bearer ${keyData.key}`,
       },
     });
-    expect(revokeResp.status()).toBe(200);
+    expect(revokeResp.status()).toBe(204);
 
     // Auth with revoked key should fail
     const revokedAuthResp = await request.get('/api/auth/me', {
@@ -62,59 +64,64 @@ test.describe('API Keys', () => {
     expect(revokedAuthResp.status()).toBe(401);
   });
 
-  test('viewer cannot create API keys', async ({ page, request }) => {
-    // Create a viewer user
-    const loginResp = await request.post('/api/auth/login', {
+  test('viewer cannot create API keys', async ({ request }) => {
+    // Login as admin and create a viewer user
+    const adminCtx = await request.newContext();
+    const loginResp = await adminCtx.post('/api/auth/login', {
       data: { identifier: user, password },
     });
     expect(loginResp.status()).toBe(200);
 
-    const csrf = await page.context().cookies().find(c => c.name === '_csrf');
-    const createUserResp = await request.post('/api/users', {
+    const adminCsrf = loginResp.headers()['x-csrf-token'];
+
+    const createUserResp = await adminCtx.post('/api/users', {
       data: { username: 'e2e-viewer', email: 'viewer@test.com', password: 'viewerpass123', role: 'viewer' },
       headers: {
-        'X-CSRF-Token': csrf?.value || '',
+        'X-CSRF-Token': adminCsrf,
       },
     });
     expect(createUserResp.status()).toBe(201);
 
     // Login as viewer
-    const viewerLoginResp = await request.post('/api/auth/login', {
+    const viewerCtx = await request.newContext();
+    const viewerLoginResp = await viewerCtx.post('/api/auth/login', {
       data: { identifier: 'e2e-viewer', password: 'viewerpass123' },
     });
     expect(viewerLoginResp.status()).toBe(200);
 
-    const viewerCsrf = await page.context().cookies().find(c => c.name === '_csrf');
-    const createKeyResp = await request.post('/api/apikeys', {
+    const viewerCsrf = viewerLoginResp.headers()['x-csrf-token'];
+
+    // Viewer tries to create API key - should be rejected
+    const createKeyResp = await viewerCtx.post('/api/apikeys', {
       data: { name: 'viewer-key' },
       headers: {
-        'X-CSRF-Token': viewerCsrf?.value || '',
+        'X-CSRF-Token': viewerCsrf,
       },
     });
     expect(createKeyResp.status()).toBe(403);
 
-    // Cleanup
-    await request.delete('/api/users/e2e-viewer', {
+    // Cleanup - delete viewer as admin
+    await adminCtx.delete('/api/users/e2e-viewer', {
       headers: {
-        'X-CSRF-Token': csrf?.value || '',
+        'X-CSRF-Token': adminCsrf,
       },
     });
   });
 
-  test('expired API key cannot authenticate', async ({ page, request }) => {
+  test('expired API key cannot authenticate', async ({ request }) => {
     // Login
     const loginResp = await request.post('/api/auth/login', {
       data: { identifier: user, password },
     });
     expect(loginResp.status()).toBe(200);
 
-    const csrf = await page.context().cookies().find(c => c.name === '_csrf');
+    const csrf = loginResp.headers()['x-csrf-token'];
 
     // Create an API key that expires in 1 second
     const createResp = await request.post('/api/apikeys', {
       data: { name: 'e2e-expired-key', expiresIn: '1s' },
       headers: {
-        'X-CSRF-Token': csrf?.value || '',
+        'X-CSRF-Token': csrf,
       },
     });
     expect(createResp.status()).toBe(201);

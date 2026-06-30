@@ -1,6 +1,7 @@
 import { mapApiError } from '@/lib/api/errors'
 import { DIALOG_CREATE_API_KEY, DIALOG_REVOKE_API_KEY } from '@/lib/registries'
 import { useAPIKeysStore } from '@/stores/apikeys'
+import { useDialogsStore } from '@/stores/dialogs'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -8,6 +9,7 @@ import { useSetTitle } from '../viewer/setTitle'
 
 export default function APIKeyManagement() {
   const { keys, loadKeys, reset } = useAPIKeysStore()
+  const openDialog = useDialogsStore((state) => state.openDialog)
   const [loading, setLoading] = useState(true)
   const { t } = useTranslation('apikeys')
 
@@ -25,15 +27,11 @@ export default function APIKeyManagement() {
   }, [loadKeys, reset, t])
 
   const handleCreate = () => {
-    window.dispatchEvent(new CustomEvent(DIALOG_CREATE_API_KEY))
+    openDialog(DIALOG_CREATE_API_KEY)
   }
 
   const handleRevoke = (keyId: string, keyName: string) => {
-    window.dispatchEvent(
-      new CustomEvent(DIALOG_REVOKE_API_KEY, {
-        detail: { keyId, keyName },
-      }),
-    )
+    openDialog(DIALOG_REVOKE_API_KEY, { keyId, keyName })
   }
 
   return (
