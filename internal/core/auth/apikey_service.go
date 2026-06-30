@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/perber/wiki/internal/core/shared"
@@ -83,6 +84,10 @@ func (s *APIKeyService) Create(userID, name string, expiresAt *time.Time) (*APIK
 }
 
 func (s *APIKeyService) Authenticate(key string) (*User, error) {
+	if !strings.HasPrefix(key, "lw_") {
+		return nil, ErrAPIKeyMalformed
+	}
+
 	hashed := hashAPIKey(key)
 
 	row, err := s.store.FindByKeyHash(hashed)

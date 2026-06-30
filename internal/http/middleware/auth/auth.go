@@ -27,6 +27,10 @@ func RequireAPIKeyAuth(apikeyService *auth.APIKeyService) gin.HandlerFunc {
 
 		user, err := apikeyService.Authenticate(apiKey)
 		if err != nil {
+			if err == auth.ErrAPIKeyMalformed {
+				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Malformed API key"})
+				return
+			}
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid API key"})
 			return
 		}

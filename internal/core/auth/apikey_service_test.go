@@ -113,6 +113,20 @@ func TestAPIKeyService_AuthenticateInvalidKey(t *testing.T) {
 	}
 }
 
+func TestAPIKeyService_AuthenticateMalformedKey(t *testing.T) {
+	apiKeySvc, _ := setupTestAPIKeyService(t)
+
+	_, err := apiKeySvc.Authenticate("not-a-valid-key")
+	if err != ErrAPIKeyMalformed {
+		t.Errorf("expected ErrAPIKeyMalformed, got %v", err)
+	}
+
+	_, err = apiKeySvc.Authenticate("")
+	if err != ErrAPIKeyMalformed {
+		t.Errorf("expected ErrAPIKeyMalformed for empty key, got %v", err)
+	}
+}
+
 func TestAPIKeyService_AuthenticateRevokedKey(t *testing.T) {
 	apiKeySvc, userSvc := setupTestAPIKeyService(t)
 	userID := createUserForTests(t, userSvc)

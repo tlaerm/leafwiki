@@ -859,6 +859,57 @@ func TestRequireAPIKeyAuth_NoBearer_PassesThrough(t *testing.T) {
 	}
 }
 
+func TestRequireAPIKeyAuth_MalformedKey_Returns400(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	dir := t.TempDir()
+	apiKeyStore, err := coreauth.NewAPIKeyStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create api key store: %v", err)
+	}
+	t.Cleanup(func() { apiKeyStore.Close() })
+
+	userStore, err := coreauth.NewUserStore(dir)
+	if err != nil {
+		t.Fatalf("failed to create user store: %v", err)
+	}
+	t.Cleanup(func() { userStore.Close() })
+
+	userSvc := coreauth.NewUserService(userStore)
+	if err := userSvc.InitDefaultAdmin("admin"); err != nil {
+		t.Fatalf("failed to init admin: %v", err)
+	}
+
+	apiKeySvc := coreauth.NewAPIKeyService(apiKeyStore, userSvc)
+
+	router := gin.New()
+	router.Use(authmw.RequireAPIKeyAuth(apiKeySvc))
+
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	// Malformed key (no lw_ prefix)
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Authorization", "Bearer not-a-valid-key")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for malformed key, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Valid prefix but non-existent key
+	req = httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Authorization", "Bearer lw_invalidkey")
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for non-existent key, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
 func TestOptionalAuth_UserAlreadyInContext_ShortCircuits(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	authCookies := authmw.NewAuthCookies(true, time.Hour, time.Hour*24)
