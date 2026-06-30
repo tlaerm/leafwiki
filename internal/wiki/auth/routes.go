@@ -114,9 +114,9 @@ func (r *Routes) RegisterRoutes(ctx httpinternal.RouterContext) {
 	}
 
 	// API key routes (require editor or admin)
-	authGroup.POST("/apikeys", authmw.RequireEditorOrAdmin(), r.handleCreateAPIKey)
-	authGroup.GET("/apikeys", authmw.RequireEditorOrAdmin(), r.handleListAPIKeys)
-	authGroup.DELETE("/apikeys/:id", authmw.RequireEditorOrAdmin(), r.handleRevokeAPIKey)
+	authGroup.POST("/apikeys", authmw.RequireEditorOrAdmin(opts.AuthDisabled), r.handleCreateAPIKey)
+	authGroup.GET("/apikeys", authmw.RequireEditorOrAdmin(opts.AuthDisabled), r.handleListAPIKeys)
+	authGroup.DELETE("/apikeys/:id", authmw.RequireEditorOrAdmin(opts.AuthDisabled), r.handleRevokeAPIKey)
 }
 
 // ─── Handlers ───────────────────────────────────────────────────────────────

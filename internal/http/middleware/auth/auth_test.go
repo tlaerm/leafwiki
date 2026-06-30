@@ -887,3 +887,131 @@ func TestOptionalAuth_UserAlreadyInContext_ShortCircuits(t *testing.T) {
 		t.Errorf("unexpected body: %s", w.Body.String())
 	}
 }
+
+func TestRequireEditorOrAdmin_AuthDisabled_BlocksAdmin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set("user", &coreauth.User{ID: "admin", Username: "admin", Role: coreauth.RoleAdmin})
+		c.Next()
+	})
+	router.Use(authmw.RequireEditorOrAdmin(true))
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403 when authDisabled=true, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestRequireEditorOrAdmin_AuthDisabled_BlocksEditor(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set("user", &coreauth.User{ID: "public-editor", Username: "public-editor", Role: coreauth.RoleEditor})
+		c.Next()
+	})
+	router.Use(authmw.RequireEditorOrAdmin(true))
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403 when authDisabled=true, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestRequireEditorOrAdmin_AdminPasses(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set("user", &coreauth.User{ID: "admin", Username: "admin", Role: coreauth.RoleAdmin})
+		c.Next()
+	})
+	router.Use(authmw.RequireEditorOrAdmin(false))
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 for admin, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestRequireEditorOrAdmin_EditorPasses(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set("user", &coreauth.User{ID: "editor", Username: "editor", Role: coreauth.RoleEditor})
+		c.Next()
+	})
+	router.Use(authmw.RequireEditorOrAdmin(false))
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 for editor, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestRequireEditorOrAdmin_ViewerBlocked(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Set("user", &coreauth.User{ID: "viewer", Username: "viewer", Role: coreauth.RoleViewer})
+		c.Next()
+	})
+	router.Use(authmw.RequireEditorOrAdmin(false))
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403 for viewer, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestRequireEditorOrAdmin_NoUser_Blocked(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	router := gin.New()
+	router.Use(authmw.RequireEditorOrAdmin(false))
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403 for no user, got %d: %s", w.Code, w.Body.String())
+	}
+}
