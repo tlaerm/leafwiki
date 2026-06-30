@@ -150,6 +150,9 @@ func NewRouter(registrars []RouteRegistrar, frontendCfg FrontendConfig, opts Rou
 
 	// API key authentication via Bearer token — runs before RequireAuth
 	if opts.APIKeyService != nil {
+		// Rate limit API key authentication per IP: 30 attempts per minute, resets on success.
+		// Prevents brute-force and enumeration attacks on API keys.
+		base.Use(security.NewRateLimiter(30, time.Minute, true))
 		base.Use(auth_middleware.RequireAPIKeyAuth(opts.APIKeyService))
 	}
 
