@@ -221,6 +221,20 @@ func (s *APIKeyStore) ListByUser(userID string) ([]APIKeyRow, error) {
 	return keys, nil
 }
 
+func (s *APIKeyStore) CountByUser(userID string) (int, error) {
+	err := s.Connect()
+	if err != nil {
+		return 0, err
+	}
+	row := s.db.QueryRow(`
+		SELECT COUNT(*) FROM api_keys
+		WHERE user_id = ? AND revoked_at IS NULL;
+	`, userID)
+	var count int
+	err = row.Scan(&count)
+	return count, err
+}
+
 func (s *APIKeyStore) Revoke(keyID string) error {
 	err := s.Connect()
 	if err != nil {

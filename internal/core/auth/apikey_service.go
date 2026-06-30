@@ -10,6 +10,8 @@ import (
 	"github.com/perber/wiki/internal/core/shared"
 )
 
+const MaxAPIKeysPerUser = 20
+
 type APIKey struct {
 	ID         string     `json:"id"`
 	Name       string     `json:"name"`
@@ -45,6 +47,14 @@ func (s *APIKeyService) Create(userID, name string, expiresAt *time.Time) (*APIK
 	user, err := s.user.GetUserByID(userID)
 	if err != nil {
 		return nil, fmt.Errorf("user not found: %w", err)
+	}
+
+	count, err := s.store.CountByUser(userID)
+	if err != nil {
+		return nil, err
+	}
+	if count >= MaxAPIKeysPerUser {
+		return nil, ErrAPIKeyLimitExceeded
 	}
 
 	key, err := generateAPIKey()

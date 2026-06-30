@@ -265,3 +265,55 @@ func TestAPIKeyService_DeleteByUser(t *testing.T) {
 		t.Errorf("expected 0 keys, got %d", len(keys))
 	}
 }
+
+func TestAPIKeyService_CreateLimitExceeded(t *testing.T) {
+	apiKeySvc, userSvc := setupTestAPIKeyService(t)
+	userID := createUserForTests(t, userSvc)
+
+	// Create up to the limit
+	for i := 0; i < MaxAPIKeysPerUser; i++ {
+		_, err := apiKeySvc.Create(userID, "key", nil)
+		if err != nil {
+			t.Fatalf("failed to create key %d (below limit): %v", i, err)
+		}
+	}
+
+	// Next one should fail
+	_, err := apiKeySvc.Create(userID, "too many", nil)
+	if err != ErrAPIKeyLimitExceeded {
+		t.Errorf("expected ErrAPIKeyLimitExceeded, got %v", err)
+	}
+}
+
+func TestAPIKeyService_CreateLimitAllowsAfterRevoke(t *testing.T) {
+	apiKeySvc, userSvc := setupTestAPIKeyService(t)
+	userID := createUserForTests(t, userSvc)
+
+	// Create up to the limit
+	for i := 0; i < MaxAPIKeysPerUser; i++ {
+		_, err := apiKeySvc.Create(userID, "key", nil)
+		if err != nil {
+			t.Fatalf("failed to create key %d: %v", i, err)
+		}
+	}
+
+	// Last one should have failed above, now revoke one
+	keys, err := apiKeySvc.List(userID)
+	if err != nil {
+		t.Fatalf("failed to list keys: %v", err)
+	}
+	if len(keys) != MaxAPIKeysPerUser {
+		t.Fatalf("expected %d keys, got %d", MaxAPIKeysPerUser, len(keys))
+	}
+
+	err = apiKeySvc.Revoke(keys[0].ID, userID)
+	if err != nil {
+		t.Fatalf("failed to revoke key: %v", err)
+	}
+
+	// Now one more should succeed
+	_, err = apiKeySvc.Create(userID, "replaced", nil)
+	if err != nil {
+		t.Errorf("expected key creation to succeed after revoke, got: %v", err)
+	}
+}

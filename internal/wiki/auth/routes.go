@@ -394,6 +394,10 @@ func (r *Routes) handleCreateAPIKey(c *gin.Context) {
 
 	out, err := r.apiKeyService.Create(user.ID, req.Name, expiresAt)
 	if err != nil {
+		if errors.Is(err, coreauth.ErrAPIKeyLimitExceeded) {
+			respondWithAuthStatusError(c, http.StatusTooManyRequests, ErrCodeAuthInvalidRequest, "API key limit exceeded (max 20 keys)", "api key limit exceeded")
+			return
+		}
 		slog.Default().Error("failed to create api key", "error", err, "userID", user.ID)
 		respondWithAuthStatusError(c, http.StatusInternalServerError, ErrCodeAuthInternalError, "Failed to create API key", "failed to create api key")
 		return
