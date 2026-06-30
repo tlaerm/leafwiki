@@ -1,11 +1,17 @@
 package auth
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
 	coreauth "github.com/perber/wiki/internal/core/auth"
 )
 
@@ -206,5 +212,38 @@ func TestUpdateUser_AdminInvalidRole(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected validation error for invalid role, got nil")
+	}
+}
+
+// TestAPIKeyNameMaxLengthValidation verifies that API key names longer than 100
+// characters are rejected by the gin binding validator.
+func TestAPIKeyNameMaxLengthValidation(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// 101 character name — exceeds the max=100 limit
+	longName := strings.Repeat("x", 101)
+
+	var req struct {
+		Name string `json:"name" binding:"required,max=100"`
+	}
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte(`{"name": "`+longName+`"}`)))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	if err := c.ShouldBindWith(&req, binding.JSON); err == nil {
+		t.Fatal("expected validation error for name > 100 characters, got nil")
+	}
+
+	// Exactly 100 characters should pass
+	exactName := strings.Repeat("x", 100)
+	c2, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c2.Request = httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte(`{"name": "`+exactName+`"}`)))
+	c2.Request.Header.Set("Content-Type", "application/json")
+
+	var req2 struct {
+		Name string `json:"name" binding:"required,max=100"`
+	}
+	if err := c2.ShouldBindWith(&req2, binding.JSON); err != nil {
+		t.Fatalf("expected 100-char name to pass validation, got error: %v", err)
 	}
 }

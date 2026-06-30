@@ -374,7 +374,7 @@ func (r *Routes) handleCreateAPIKey(c *gin.Context) {
 		return
 	}
 	var req struct {
-		Name       string  `json:"name" binding:"required"`
+		Name       string  `json:"name" binding:"required,max=100"`
 		ExpiresIn  *string `json:"expiresIn"` // optional, e.g. "30d", "90d"
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
