@@ -399,6 +399,7 @@ func main() {
 			LogoutURL:      httpRemoteUserLogoutURL,
 		},
 		DisableRequestLog: disableRequestLog,
+		APIKeyService:     w.APIKeyService(),
 	})
 
 	listenAddr := host + ":" + port

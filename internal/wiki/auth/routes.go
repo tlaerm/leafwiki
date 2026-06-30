@@ -2,9 +2,11 @@ package auth
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -30,6 +32,7 @@ type Routes struct {
 	getUsers          *GetUsersUseCase
 	getUserByID       *GetUserByIDUseCase
 	authService       *coreauth.AuthService
+	apiKeyService     *coreauth.APIKeyService
 }
 
 // RoutesConfig holds the dependencies to build an auth Routes instance.
@@ -44,6 +47,7 @@ type RoutesConfig struct {
 	GetUsers          *GetUsersUseCase
 	GetUserByID       *GetUserByIDUseCase
 	AuthService       *coreauth.AuthService
+	APIKeyService     *coreauth.APIKeyService
 }
 
 // NewRoutes constructs the auth RouteRegistrar.
@@ -59,6 +63,7 @@ func NewRoutes(cfg RoutesConfig) *Routes {
 		getUsers:          cfg.GetUsers,
 		getUserByID:       cfg.GetUserByID,
 		authService:       cfg.AuthService,
+		apiKeyService:     cfg.APIKeyService,
 	}
 }
 
@@ -107,6 +112,11 @@ func (r *Routes) RegisterRoutes(ctx httpinternal.RouterContext) {
 	if !opts.AuthDisabled {
 		authGroup.PUT("/users/me/password", r.handleChangeOwnPassword)
 	}
+
+	// API key routes (require editor or admin)
+	authGroup.POST("/apikeys", authmw.RequireEditorOrAdmin(), r.handleCreateAPIKey)
+	authGroup.GET("/apikeys", authmw.RequireEditorOrAdmin(), r.handleListAPIKeys)
+	authGroup.DELETE("/apikeys/:id", authmw.RequireEditorOrAdmin(), r.handleRevokeAPIKey)
 }
 
 // ─── Handlers ───────────────────────────────────────────────────────────────
@@ -356,4 +366,112 @@ func (r *Routes) handleChangeOwnPassword(c *gin.Context) {
 		return
 	}
 	c.Status(http.StatusNoContent)
+}
+
+func (r *Routes) handleCreateAPIKey(c *gin.Context) {
+	user := authmw.MustGetUser(c)
+	if user == nil {
+		return
+	}
+	var req struct {
+		Name       string  `json:"name" binding:"required"`
+		ExpiresIn  *string `json:"expiresIn"` // optional, e.g. "30d", "90d"
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		respondWithAuthStatusError(c, http.StatusBadRequest, ErrCodeAuthInvalidRequest, "Invalid request", "invalid request")
+		return
+	}
+
+	var expiresAt *time.Time
+	if req.ExpiresIn != nil && *req.ExpiresIn != "" {
+		d, err := parseDuration(*req.ExpiresIn)
+		if err != nil {
+			respondWithAuthStatusError(c, http.StatusBadRequest, ErrCodeAuthInvalidRequest, "Invalid duration format (e.g. 30d, 90d)", "invalid duration")
+			return
+		}
+		expiresAt = timePtr(time.Now().Add(d))
+	}
+
+	out, err := r.apiKeyService.Create(user.ID, req.Name, expiresAt)
+	if err != nil {
+		slog.Default().Error("failed to create api key", "error", err, "userID", user.ID)
+		respondWithAuthStatusError(c, http.StatusInternalServerError, ErrCodeAuthInternalError, "Failed to create API key", "failed to create api key")
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"id":        out.ID,
+		"name":      out.Name,
+		"key":       out.Key,
+		"expiresAt": out.ExpiresAt,
+		"createdAt": out.CreatedAt,
+	})
+}
+
+func (r *Routes) handleListAPIKeys(c *gin.Context) {
+	user := authmw.MustGetUser(c)
+	if user == nil {
+		return
+	}
+	keys, err := r.apiKeyService.List(user.ID)
+	if err != nil {
+		slog.Default().Error("failed to list api keys", "error", err, "userID", user.ID)
+		respondWithAuthStatusError(c, http.StatusInternalServerError, ErrCodeAuthInternalError, "Failed to list API keys", "failed to list api keys")
+		return
+	}
+
+	result := make([]gin.H, 0, len(keys))
+	for _, k := range keys {
+		result = append(result, gin.H{
+			"id":         k.ID,
+			"name":       k.Name,
+			"expiresAt":  k.ExpiresAt,
+			"createdAt":  k.CreatedAt,
+			"lastUsedAt": k.LastUsedAt,
+		})
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+func (r *Routes) handleRevokeAPIKey(c *gin.Context) {
+	id := c.Param("id")
+	if err := r.apiKeyService.Revoke(id); err != nil {
+		if errors.Is(err, coreauth.ErrAPIKeyNotFound) {
+			respondWithAuthStatusError(c, http.StatusNotFound, ErrCodeAuthUserNotFound, "API key not found", "api key not found")
+			return
+		}
+		slog.Default().Error("failed to revoke api key", "error", err, "keyID", id)
+		respondWithAuthStatusError(c, http.StatusInternalServerError, ErrCodeAuthInternalError, "Failed to revoke API key", "failed to revoke api key")
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+func parseDuration(s string) (time.Duration, error) {
+	if len(s) < 2 {
+		return 0, fmt.Errorf("invalid duration: %s", s)
+	}
+	unit := s[len(s)-1:]
+	n, err := strconv.Atoi(s[:len(s)-1])
+	if err != nil {
+		return 0, fmt.Errorf("invalid duration: %s", s)
+	}
+	switch unit {
+	case "d":
+		return time.Duration(n) * 24 * time.Hour, nil
+	case "h":
+		return time.Duration(n) * time.Hour, nil
+	case "w":
+		return time.Duration(n) * 7 * 24 * time.Hour, nil
+	case "m":
+		return time.Duration(n) * 30 * 24 * time.Hour, nil
+	case "y":
+		return time.Duration(n) * 365 * 24 * time.Hour, nil
+	default:
+		return 0, fmt.Errorf("unsupported duration unit: %s", s)
+	}
+}
+
+func timePtr(t time.Time) *time.Time {
+	return &t
 }

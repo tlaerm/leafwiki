@@ -13,8 +13,14 @@ func CSRFMiddleware(csrf *CSRFCookie) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		method := c.Request.Method
 
-		// Only protect mutating methods (POST, PUT, PATCH, DELETE)
+		// Skip for safe methods
 		if method == http.MethodGet || method == http.MethodHead || method == http.MethodOptions {
+			c.Next()
+			return
+		}
+
+		// Skip for API key authenticated requests (Bearer tokens don't need CSRF)
+		if _, exists := c.Get("apiKeyAuth"); exists {
 			c.Next()
 			return
 		}

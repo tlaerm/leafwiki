@@ -2,10 +2,40 @@ package auth
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/perber/wiki/internal/core/auth"
 )
+
+// RequireAPIKeyAuth authenticates requests via Bearer token (API key).
+// It runs before RequireAuth so that if the API key is valid, RequireAuth
+// will short-circuit on the already-set user context.
+func RequireAPIKeyAuth(apikeyService *auth.APIKeyService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if !strings.HasPrefix(authHeader, "Bearer ") {
+			c.Next()
+			return
+		}
+
+		apiKey := strings.TrimPrefix(authHeader, "Bearer ")
+		if apikeyService == nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "API key authentication unavailable"})
+			return
+		}
+
+		user, err := apikeyService.Authenticate(apiKey)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid API key"})
+			return
+		}
+
+		c.Set("user", user)
+		c.Set("apiKeyAuth", true)
+		c.Next()
+	}
+}
 
 func RequireAuth(authService *auth.AuthService, authCookies *AuthCookies, authDisabled bool) gin.HandlerFunc {
 	return func(c *gin.Context) {

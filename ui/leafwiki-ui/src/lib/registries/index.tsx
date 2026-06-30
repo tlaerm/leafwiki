@@ -9,6 +9,7 @@ import {
   ChangeOwnPasswordDialog,
   ChangePasswordDialog,
   CopyPageDialog,
+  CreateApiKeyDialog,
   CreatePageByPathDialog,
   DeletePageDialog,
   DeleteUserDialog,
@@ -19,6 +20,7 @@ import {
   PageQuickSwitcherDialog,
   PageRefactorDialog,
   PermalinkDialog,
+  RevokeApiKeyDialog,
   RestoreRevisionDialog,
   Search,
   ShortcutsDialog,
@@ -83,6 +85,8 @@ export const DIALOG_RESTORE_REVISION_CONFIRMATION =
 export const DIALOG_LINK_INSERT = 'link-insert'
 export const DIALOG_WIKILINK_DISAMBIGUATION = 'wikilink-disambiguation'
 export const DIALOG_SHORTCUTS_HELP = 'shortcuts-help'
+export const DIALOG_CREATE_API_KEY = 'create-api-key'
+export const DIALOG_REVOKE_API_KEY = 'revoke-api-key'
 
 dialogRegistry.register({
   type: DIALOG_ADD_PAGE,
@@ -322,6 +326,27 @@ dialogRegistry.register({
         {...(props as React.ComponentProps<
           typeof WikiLinkDisambiguationDialog
         >)}
+      />
+    )
+  },
+})
+
+dialogRegistry.register({
+  type: DIALOG_CREATE_API_KEY,
+  render: () => {
+    return <CreateApiKeyDialog key={DIALOG_CREATE_API_KEY} />
+  },
+})
+
+dialogRegistry.register({
+  type: DIALOG_REVOKE_API_KEY,
+  render: (props) => {
+    const typedProps = props as { keyId: string; keyName: string }
+    return (
+      <RevokeApiKeyDialog
+        key={`${DIALOG_REVOKE_API_KEY}-${typedProps.keyId}`}
+        keyId={typedProps.keyId}
+        keyName={typedProps.keyName}
       />
     )
   },

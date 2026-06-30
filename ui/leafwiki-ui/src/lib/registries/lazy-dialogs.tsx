@@ -104,3 +104,13 @@ export const UserFormDialog = lazy(() =>
     default: m.UserFormDialog,
   })),
 )
+export const CreateApiKeyDialog = lazy(() =>
+  import('@/features/apikeys/CreateApiKeyDialog').then((m) => ({
+    default: m.CreateApiKeyDialog,
+  })),
+)
+export const RevokeApiKeyDialog = lazy(() =>
+  import('@/features/apikeys/RevokeApiKeyDialog').then((m) => ({
+    default: m.RevokeApiKeyDialog,
+  })),
+)
