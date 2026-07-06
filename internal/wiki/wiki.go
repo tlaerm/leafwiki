@@ -46,6 +46,7 @@ type Wiki struct {
 	searchIndex  *search.SQLiteIndex
 	status       *search.IndexingStatus
 	storageDir   string
+	options      *WikiOptions
 
 	// Domain route registrars (populated by NewWiki).
 	pagesRoutes      *wikipages.Routes
@@ -81,12 +82,14 @@ type WikiOptions struct {
 	MaxRevisionHistory      int           // Max revisions kept per page; 0 = unlimited
 	MaxAssetUploadSizeBytes int64         // Maximum allowed size in bytes for asset/import uploads; 0 = default
 	RevisionCoalesceWindow  time.Duration // Window for coalescing rapid successive saves; 0 = disabled
+	MCPAdminToolsEnabled    bool          // Whether to expose admin MCP tools (list_users, create_user, delete_user)
 }
 
 func NewWiki(options *WikiOptions) (*Wiki, error) {
 	w := &Wiki{
 		storageDir: options.StorageDir,
 		log:        slog.Default().With("component", "Wiki"),
+		options:    options,
 	}
 	if err := w.initAuth(options); err != nil {
 		return nil, err
@@ -443,14 +446,15 @@ func (w *Wiki) buildBrandingRoutes() *wikibranding.Routes {
 
 func (w *Wiki) buildMCPRoutes() *wikimcp.Server {
 	return wikimcp.New(wikimcp.Config{
-		Name:        "LeafWiki",
-		Version:     "0.1.0",
-		APIKeySvc:   w.apiKey,
-		TreeSvc:     w.tree,
-		SlugSvc:     w.slug,
-		SearchIndex: w.searchIndex,
-		RevisionSvc: w.revision,
-		UserSvc:     w.user,
+		Name:                "LeafWiki",
+		Version:             "0.1.0",
+		APIKeySvc:           w.apiKey,
+		TreeSvc:             w.tree,
+		SlugSvc:             w.slug,
+		SearchIndex:         w.searchIndex,
+		RevisionSvc:         w.revision,
+		UserSvc:             w.user,
+		MCPAdminToolsEnabled: w.options.MCPAdminToolsEnabled,
 	})
 }
 

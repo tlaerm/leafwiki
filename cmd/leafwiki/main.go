@@ -64,7 +64,8 @@ func writeUsage(w io.Writer) {
 	--git-backup-ssh-key-path      Path to SSH private key for git backup
 	--git-backup-ssh-key           Raw SSH private key for git backup (env var preferred)
 	--git-backup-ssh-known-hosts   Path to known_hosts file for SSH host key verification (MITM protection)
-	--git-backup-interval          Git backup interval (e.g. 60m, 2h); 0 = manual-only, no automatic scheduling (default: 60m)
+			--git-backup-interval          Git backup interval (e.g. 60m, 2h); 0 = manual-only, no automatic scheduling (default: 60m)
+		--mcp-admin-tools-enabled      Expose admin MCP tools (list_users, create_user, delete_user) (default: false)
 
 	Environment variables:
 	LEAFWIKI_HOST
@@ -101,6 +102,7 @@ func writeUsage(w io.Writer) {
 	LEAFWIKI_GIT_BACKUP_SSH_KEY
 	LEAFWIKI_GIT_BACKUP_SSH_KNOWN_HOSTS
 	LEAFWIKI_GIT_BACKUP_INTERVAL
+	LEAFWIKI_MCP_ADMIN_TOOLS_ENABLED
 	`); err != nil {
 		panic(err)
 	}
@@ -167,6 +169,7 @@ type cliFlags struct {
 	gitBackupSSHKnownHosts  *string
 	gitBackupInterval       *time.Duration
 	revisionCoalesceWindow  *time.Duration
+	mcpAdminToolsEnabled    *bool
 }
 
 func registerFlags(fs *flag.FlagSet) *cliFlags {
@@ -204,6 +207,7 @@ func registerFlags(fs *flag.FlagSet) *cliFlags {
 		gitBackupSSHKnownHosts:  fs.String("git-backup-ssh-known-hosts", "", "path to known_hosts file for SSH host key verification (MITM protection)"),
 		gitBackupInterval:       fs.Duration("git-backup-interval", 60*time.Minute, "git backup interval (e.g. 60m, 2h); 0 = manual-only, no automatic scheduling (default: 60m)"),
 		revisionCoalesceWindow:  fs.Duration("revision-coalesce-window", 5*time.Minute, "window for coalescing rapid successive saves by the same author; 0 = disabled (default: 5m)"),
+		mcpAdminToolsEnabled:    fs.Bool("mcp-admin-tools-enabled", false, "expose admin MCP tools (list_users, create_user, delete_user) (default: false)"),
 	}
 }
 
@@ -257,6 +261,7 @@ func main() {
 	gitBackupSSHKey := resolveString("git-backup-ssh-key", *flags.gitBackupSSHKey, visited, "LEAFWIKI_GIT_BACKUP_SSH_KEY", "")
 	gitBackupInterval := resolveDuration("git-backup-interval", *flags.gitBackupInterval, visited, "LEAFWIKI_GIT_BACKUP_INTERVAL")
 	gitBackupSSHKnownHosts := resolveString("git-backup-ssh-known-hosts", *flags.gitBackupSSHKnownHosts, visited, "LEAFWIKI_GIT_BACKUP_SSH_KNOWN_HOSTS", "")
+	mcpAdminToolsEnabled := resolveBool("mcp-admin-tools-enabled", *flags.mcpAdminToolsEnabled, visited, "LEAFWIKI_MCP_ADMIN_TOOLS_ENABLED")
 	trustedProxies, err := authmw.ParseTrustedProxies(trustedProxyIPsRaw)
 	if err != nil {
 		fail("invalid --trusted-proxy-ips value", "error", err)
@@ -338,6 +343,7 @@ func main() {
 		EnableRevision:         enableRevision,
 		MaxRevisionHistory:     maxRevisionHistory,
 		RevisionCoalesceWindow: revisionCoalesceWindow,
+		MCPAdminToolsEnabled:   mcpAdminToolsEnabled,
 	})
 	if err != nil {
 		fail("Failed to initialize Wiki", "error", err)

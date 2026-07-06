@@ -12,14 +12,15 @@ import (
 )
 
 type Config struct {
-	Name        string
-	Version     string
-	APIKeySvc   *auth.APIKeyService
-	TreeSvc     *tree.TreeService
-	SlugSvc     *tree.SlugService
-	SearchIndex *search.SQLiteIndex
-	RevisionSvc *revision.Service
-	UserSvc     *auth.UserService
+	Name                 string
+	Version              string
+	APIKeySvc            *auth.APIKeyService
+	TreeSvc              *tree.TreeService
+	SlugSvc              *tree.SlugService
+	SearchIndex          *search.SQLiteIndex
+	RevisionSvc          *revision.Service
+	UserSvc              *auth.UserService
+	MCPAdminToolsEnabled bool
 }
 
 type Server struct {
@@ -35,7 +36,9 @@ func New(config Config) *Server {
 func (s *Server) Mount() http.Handler {
 	s.registerReadTools()
 	s.registerWriteTools()
-	s.registerAdminTools()
+	if s.config.MCPAdminToolsEnabled {
+		s.registerAdminTools()
+	}
 
 	return server.NewStreamableHTTPServer(s.svc,
 		server.WithEndpointPath("/api/mcp"),
