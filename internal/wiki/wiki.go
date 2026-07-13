@@ -446,14 +446,15 @@ func (w *Wiki) buildBrandingRoutes() *wikibranding.Routes {
 
 func (w *Wiki) buildMCPRoutes() *wikimcp.Server {
 	return wikimcp.New(wikimcp.Config{
-		Name:                "LeafWiki",
-		Version:             "0.1.0",
-		APIKeySvc:           w.apiKey,
-		TreeSvc:             w.tree,
-		SlugSvc:             w.slug,
-		SearchIndex:         w.searchIndex,
-		RevisionSvc:         w.revision,
-		UserSvc:             w.user,
+		Name:                 "LeafWiki",
+		Version:              "0.1.0",
+		APIKeySvc:            w.apiKey,
+		TreeSvc:              w.tree,
+		SlugSvc:              w.slug,
+		SearchIndex:          w.searchIndex,
+		RevisionSvc:          w.revision,
+		UserSvc:              w.user,
+		AssetSvc:             w.asset,
 		MCPAdminToolsEnabled: w.options.MCPAdminToolsEnabled,
 	})
 }

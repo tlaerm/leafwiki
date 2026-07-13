@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/perber/wiki/internal/core/assets"
 	"github.com/perber/wiki/internal/core/auth"
 	"github.com/perber/wiki/internal/core/revision"
 	"github.com/perber/wiki/internal/core/tree"
@@ -20,6 +21,7 @@ type Config struct {
 	SearchIndex          *search.SQLiteIndex
 	RevisionSvc          *revision.Service
 	UserSvc              *auth.UserService
+	AssetSvc             *assets.AssetService
 	MCPAdminToolsEnabled bool
 }
 
